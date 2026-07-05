@@ -41,6 +41,7 @@
 }
 
 body {
+  --line: var(--rz-line-gh);
   margin: 0;
   min-height: 100vh;
   background:
@@ -51,6 +52,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-size: 0.84375rem;
   line-height: 1.45;
+}
+
+body.mode-transit {
+  --line: var(--rz-line-cx);
 }
 
 button,
@@ -86,8 +91,8 @@ textarea:focus-visible,
 .primary {
   width: 100%;
   min-height: 42px;
-  border-color: var(--rz-line-gh);
-  background: var(--rz-line-gh);
+  border-color: var(--line);
+  background: var(--line);
   color: var(--rz-surface);
   font-weight: 700;
 }
@@ -111,6 +116,17 @@ p {
 h1 {
   font-size: 0.9375rem;
   letter-spacing: 0.05em;
+}
+
+h1 .mark {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  background: var(--rz-surface);
+  vertical-align: -2px;
 }
 
 h2,
@@ -202,10 +218,6 @@ h2,
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.four {
-  grid-template-columns: repeat(4, minmax(88px, 1fr));
-}
-
 label {
   display: grid;
   gap: 4px;
@@ -249,7 +261,7 @@ textarea {
 }
 
 .segmented .active {
-  background: var(--rz-line-cx);
+  background: var(--line);
   color: var(--rz-surface);
 }
 
@@ -278,7 +290,8 @@ textarea {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 狭いパネル幅では 1 列に落として 1.75rem の数値がタイルからあふれないようにする */
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 8px;
 }
 
@@ -291,8 +304,13 @@ textarea {
 .summary-grid b {
   display: block;
   font-family: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
-  font-size: 1.125rem;
+  font-size: 1.75rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.summary-grid .crit b {
+  color: var(--rz-crit);
 }
 
 .summary-grid span {
@@ -311,15 +329,11 @@ textarea {
   gap: 0;
 }
 
-.stop {
+.stop,
+.leg {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
-  border-bottom: 1px solid var(--rz-border);
   background: var(--rz-surface);
-}
-
-.stop:nth-child(even) {
-  background: var(--rz-surface-2);
 }
 
 .rail {
@@ -337,7 +351,7 @@ textarea {
   left: 50%;
   width: 3px;
   transform: translateX(-50%);
-  background: var(--rz-line-cx);
+  background: var(--line);
 }
 
 .rail span {
@@ -347,7 +361,7 @@ textarea {
   width: 24px;
   height: 24px;
   place-items: center;
-  border: 3px solid var(--rz-line-cx);
+  border: 3px solid var(--line);
   border-radius: 999px;
   background: var(--rz-surface);
   color: var(--rz-text);
@@ -360,11 +374,13 @@ textarea {
   display: grid;
   gap: 8px;
   padding: 10px 0 10px 8px;
+  border-bottom: 1px solid var(--rz-border);
 }
 
 .stop-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: 8px;
 }
 
@@ -385,29 +401,88 @@ textarea {
 }
 
 .move button {
-  min-width: 34px;
-  min-height: 30px;
-  padding: 4px 8px;
+  min-width: 28px;
+  min-height: 28px;
+  border-color: var(--rz-border);
+  padding: 2px 6px;
 }
 
-.metrics {
+.move button[data-del]:hover {
+  border-color: var(--rz-crit);
+  color: var(--rz-crit);
+}
+
+/* 路線の端点処理: 起点 S の上・最終行のドット下に線を伸ばさない(ドット中心 = 上端 14px + 半径 12px) */
+.origin-stop .rail::before {
+  top: 14px;
+}
+
+.timeline > article:last-child .rail::before {
+  top: 0;
+  bottom: auto;
+  height: 26px;
+}
+
+.origin-stop .rail span,
+.return-stop .rail span {
+  border-color: var(--rz-line-cl);
+  background: var(--rz-line-cl);
+  color: var(--rz-surface);
+}
+
+.terminal-top {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.arrive {
+  color: var(--rz-text);
+  font-family: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.times,
+.leg-body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--rz-text-2);
   font-family: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
-.metrics a {
+.leg-body {
+  padding: 8px 0 8px 8px;
+}
+
+.leg a {
   color: var(--rz-line-gh);
+}
+
+.more {
+  display: grid;
+  gap: 8px;
+}
+
+.more summary {
+  cursor: pointer;
+  color: var(--rz-text-2);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .muted,
 .empty {
   color: var(--rz-text-2);
+}
+
+.empty {
+  border: 1px dashed var(--rz-border-strong);
+  padding: 16px;
+  text-align: center;
 }
 
 .mini-map {
@@ -427,27 +502,32 @@ textarea {
 
 .mini-map polyline {
   fill: none;
-  stroke: var(--rz-line-gh);
+  stroke: var(--line);
   stroke-width: 3;
 }
 
 .mini-map circle {
-  stroke: var(--rz-surface);
+  fill: var(--rz-surface);
   stroke-width: 3;
 }
 
 .mini-map .start {
-  fill: var(--rz-line-cl);
+  stroke: var(--rz-line-cl);
 }
 
 .mini-map .place {
-  fill: var(--rz-line-cx);
+  stroke: var(--line);
+}
+
+.mini-map .grid-line {
+  stroke: var(--rz-border);
+  stroke-width: 1;
 }
 
 .mini-map text {
   fill: var(--rz-text);
   font-family: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -466,13 +546,17 @@ footer {
     display: block;
   }
 
+  .layout {
+    padding: 12px;
+  }
+
   .header-actions {
     justify-content: start;
     margin-top: 12px;
   }
 
   .panel {
-    margin: 12px;
+    margin: 0 0 12px;
   }
 
   .places-panel {
@@ -480,13 +564,23 @@ footer {
     grid-row: auto;
   }
 
-  .four,
   .two {
     grid-template-columns: 1fr;
   }
 
-  .search-row,
+  .search-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .search-row input {
+    grid-column: 1 / -1;
+  }
+
   .stop-top {
     grid-template-columns: 1fr;
+  }
+
+  .stop-top .move {
+    justify-content: start;
   }
 }

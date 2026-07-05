@@ -126,7 +126,7 @@
       '<div><b>' + fmtMin(lastSchedule.totalTravelMin) + '</b><span>総移動</span></div>',
       '<div><b>' + fmtMin(lastSchedule.totalStayMin) + '</b><span>総滞在</span></div>',
       '<div><b>' + lastSchedule.finishTime + '</b><span>帰着/終了</span></div>',
-      '<div><b>' + fmtMin(lastSchedule.totalLateMin) + '</b><span>遅刻合計</span></div>'
+      '<div' + (lastSchedule.totalLateMin > 0 ? ' class="crit"' : '') + '><b>' + fmtMin(lastSchedule.totalLateMin) + '</b><span>遅刻合計</span></div>'
     ].join('');
   }
 
@@ -147,10 +147,15 @@
     $('placeCount').textContent = state.places.length + ' 件';
     var timeline = $('timeline');
     if (!state.places.length) {
-      timeline.innerHTML = '<p class="empty">場所を追加してください。</p>';
+      timeline.innerHTML = '<p class="empty">場所を追加すると、ここに路線図が描かれます。</p>';
       return;
     }
-    timeline.innerHTML = '';
+    // 再レンダリングで details(詳細)の開閉状態を失わないよう、開いている場所IDを控える
+    var openDetails = {};
+    timeline.querySelectorAll('.more[open]').forEach(function (el) {
+      openDetails[el.getAttribute('data-place')] = true;
+    });
+    timeline.innerHTML = renderTerminalStop('origin-stop', 'S', state.departure.name || '出発地', '出発 ' + (state.departTime || '09:00'));
     for (var i = 0; i < state.places.length; i++) {
       var place = state.places[i];
       var stop = stopInfoByPlaceId(place.id);
@@ -158,20 +163,25 @@
       var article = document.createElement('article');
       article.className = 'stop';
       var from = i === 0 ? state.departure : state.places[i - 1];
-      var link = googleLink(from, place);
+      timeline.insertAdjacentHTML('beforeend', renderLeg(leg, googleLink(from, place), false));
       article.innerHTML =
         '<div class="rail"><span>' + (i + 1) + '</span></div>' +
         '<div class="stop-body">' +
         '<div class="stop-top"><input class="name" data-field="name" data-index="' + i + '" value="' + escapeAttr(place.name) + '">' +
-        '<div class="move"><button type="button" data-up="' + i + '">↑</button><button type="button" data-down="' + i + '">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
-        '<div class="grid four">' +
-        '<label>希望<input type="time" data-field="desired" data-index="' + i + '" value="' + escapeAttr(place.desired || '') + '"></label>' +
-        '<label>滞在分<input type="number" min="0" step="5" data-field="stayMin" data-index="' + i + '" value="' + escapeAttr(place.stayMin) + '"></label>' +
+        renderArrival(stop) +
+        '<div class="move"><button type="button" data-up="' + i + '" aria-label="上へ">↑</button><button type="button" data-down="' + i + '" aria-label="下へ">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
+        renderTimes(stop) +
+        '<div class="grid two">' +
+        '<label>希望到着<input type="time" data-field="desired" data-index="' + i + '" value="' + escapeAttr(place.desired || '') + '"></label>' +
+        '<label>滞在(分)<input type="number" min="0" step="5" data-field="stayMin" data-index="' + i + '" value="' + escapeAttr(place.stayMin) + '"></label>' +
+        '</div>' +
+        '<details class="more" data-place="' + escapeAttr(place.id) + '"' + (openDetails[place.id] ? ' open' : '') + '><summary>詳細(座標・メモ)</summary>' +
+        '<div class="grid two">' +
         '<label>緯度<input type="number" step="0.000001" data-field="lat" data-index="' + i + '" value="' + escapeAttr(place.lat) + '"></label>' +
         '<label>経度<input type="number" step="0.000001" data-field="lng" data-index="' + i + '" value="' + escapeAttr(place.lng) + '"></label>' +
         '</div>' +
         '<label>メモ<textarea data-field="memo" data-index="' + i + '">' + escapeHtml(place.memo || '') + '</textarea></label>' +
-        renderStopMetrics(stop, leg, link) +
+        '</details>' +
         '</div>';
       timeline.appendChild(article);
     }
@@ -181,35 +191,46 @@
   function renderReturnLeg(timeline) {
     if (!lastSchedule || !lastSchedule.returnLeg) return;
     var from = state.places[state.places.length - 1];
-    var link = googleLink(from, state.departure);
-    var article = document.createElement('article');
-    article.className = 'stop return-stop';
-    article.innerHTML =
-      '<div class="rail"><span>R</span></div>' +
-      '<div class="stop-body">' +
-      '<div class="stop-top"><strong>' + escapeHtml(state.departure.name || '出発地') + '</strong></div>' +
-      '<div class="metrics">' +
-      '<span>帰路</span>' +
-      '<span>移動 ' + fmtMin(lastSchedule.returnLeg.travelMin) + '</span>' +
-      '<a href="' + link + '" target="_blank" rel="noopener">Google マップ</a>' +
-      '</div>' +
-      '</div>';
-    timeline.appendChild(article);
+    timeline.insertAdjacentHTML('beforeend', renderLeg(lastSchedule.returnLeg, googleLink(from, state.departure), true));
+    timeline.insertAdjacentHTML('beforeend', renderTerminalStop('return-stop', 'G', state.departure.name || '出発地', '帰着 ' + lastSchedule.finishTime));
   }
 
-  function renderStopMetrics(stop, leg, link) {
-    if (!stop) return '<div class="metrics muted">未計算</div>';
+  function renderTerminalStop(cls, marker, name, time) {
+    return '<article class="stop ' + cls + '">' +
+      '<div class="rail"><span>' + marker + '</span></div>' +
+      '<div class="stop-body">' +
+      '<div class="stop-top terminal-top"><strong>' + escapeHtml(name) + '</strong><span class="arrive">' + escapeHtml(time) + '</span></div>' +
+      '</div>' +
+      '</article>';
+  }
+
+  function renderLeg(leg, link, isReturn) {
+    var label = leg && matrixInfo.approximate ? '<span class="badge warn">' + (state.mode === 'transit' ? '目安' : '概算') + '</span>' : '';
+    return '<article class="leg">' +
+      '<div class="rail"></div>' +
+      '<div class="leg-body">' +
+      (isReturn ? '<span>帰路</span>' : '') +
+      '<span>移動 ' + (leg ? fmtMin(leg.travelMin) : '-') + '</span>' +
+      label +
+      '<a href="' + link + '" target="_blank" rel="noopener">Google マップ</a>' +
+      '</div>' +
+      '</article>';
+  }
+
+  function renderArrival(stop) {
+    if (!stop) return '';
+    return '<span class="arrive">到着 ' + escapeHtml(stop.arrival) + '</span>';
+  }
+
+  function renderTimes(stop) {
+    if (!stop) return '<div class="times muted">未計算</div>';
     var badges = '';
     if (stop.waitMin > 0) badges += '<span class="badge">待機 ' + fmtMin(stop.waitMin) + '</span>';
     if (stop.lateMin > 0) badges += '<span class="badge crit">遅刻 ' + fmtMin(stop.lateMin) + '</span>';
-    if (matrixInfo.approximate) badges += '<span class="badge warn">' + (state.mode === 'transit' ? '目安' : '概算') + '</span>';
-    return '<div class="metrics">' +
-      '<span>移動 ' + (leg ? fmtMin(leg.travelMin) : '-') + '</span>' +
-      '<span>到着 ' + stop.arrival + '</span>' +
+    return '<div class="times">' +
       '<span>開始 ' + stop.start + '</span>' +
       '<span>出発 ' + stop.depart + '</span>' +
       badges +
-      '<a href="' + link + '" target="_blank" rel="noopener">Google マップ</a>' +
       '</div>';
   }
 
@@ -240,7 +261,7 @@
       minLng = Math.min(minLng, points[i].lng);
       maxLng = Math.max(maxLng, points[i].lng);
     }
-    var pad = 28;
+    var pad = 36;
     var w = 420;
     var h = 220;
     function x(p) {
@@ -252,12 +273,20 @@
     var poly = points.map(function (p) { return x(p).toFixed(1) + ',' + y(p).toFixed(1); }).join(' ');
     var dots = points.map(function (p, idx) {
       var cls = idx === 0 ? 'start' : 'place';
-      return '<g><circle class="' + cls + '" cx="' + x(p).toFixed(1) + '" cy="' + y(p).toFixed(1) + '" r="6"></circle><text x="' + (x(p) + 10).toFixed(1) + '" y="' + (y(p) + 4).toFixed(1) + '">' + (idx === 0 ? 'S' : idx) + '</text></g>';
+      return '<g><circle class="' + cls + '" cx="' + x(p).toFixed(1) + '" cy="' + y(p).toFixed(1) + '" r="7"></circle><text x="' + (x(p) + 11).toFixed(1) + '" y="' + (y(p) + 4).toFixed(1) + '">' + (idx === 0 ? 'S' : idx) + '</text></g>';
     }).join('');
-    target.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="訪問順ミニ地図"><rect x="1" y="1" width="' + (w - 2) + '" height="' + (h - 2) + '"></rect><polyline points="' + poly + '"></polyline>' + dots + '</svg>';
+    var grid = [
+      '<line class="grid-line" x1="' + (w / 4).toFixed(1) + '" y1="1" x2="' + (w / 4).toFixed(1) + '" y2="' + (h - 1) + '"></line>',
+      '<line class="grid-line" x1="' + (w / 2).toFixed(1) + '" y1="1" x2="' + (w / 2).toFixed(1) + '" y2="' + (h - 1) + '"></line>',
+      '<line class="grid-line" x1="' + (w * 3 / 4).toFixed(1) + '" y1="1" x2="' + (w * 3 / 4).toFixed(1) + '" y2="' + (h - 1) + '"></line>',
+      '<line class="grid-line" x1="1" y1="' + (h / 3).toFixed(1) + '" x2="' + (w - 1) + '" y2="' + (h / 3).toFixed(1) + '"></line>',
+      '<line class="grid-line" x1="1" y1="' + (h * 2 / 3).toFixed(1) + '" x2="' + (w - 1) + '" y2="' + (h * 2 / 3).toFixed(1) + '"></line>'
+    ].join('');
+    target.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="訪問順ミニ地図"><rect x="1" y="1" width="' + (w - 2) + '" height="' + (h - 2) + '"></rect>' + grid + '<polyline points="' + poly + '"></polyline>' + dots + '</svg>';
   }
 
   function render() {
+    document.body.classList.toggle('mode-transit', state.mode === 'transit');
     syncInputs();
     renderSummary();
     renderPlaces();
