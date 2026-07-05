@@ -10,7 +10,7 @@
 ## 開発
 
 ```bash
-python3 -m http.server 8765 -d .   # http://localhost:8765/
+python3 -m http.server 8770 -d .   # http://localhost:8770/
 bash test/run.sh                    # 構文チェック + ユニットテスト(JXA・node 不要)
 ```
 

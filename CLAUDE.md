@@ -26,7 +26,7 @@
   python3 -c "import ast; ast.parse(open('tools/gen_icons.py',encoding='utf-8').read())"
   ```
 
-- 動作確認: `python3 -m http.server 8765 -d .` → `http://localhost:8765/`(localhost は secure context 扱いなので位置情報も可)。停止はポート特定 `lsof -ti tcp:8765 | xargs kill`。ヘッドレス確認は headless Chrome + CDP(共通ノウハウ [[2026-07-04_07-36_headlessChromeはCDPで回収]])。
+- 動作確認: `python3 -m http.server 8770 -d .` → `http://localhost:8770/`(localhost は secure context 扱いなので位置情報も可)。停止はポート特定 `lsof -ti tcp:8770 | xargs kill`。ヘッドレス確認は headless Chrome + CDP(共通ノウハウ [[2026-07-04_07-36_headlessChromeはCDPで回収]])。
 
 ## Obsidian Vault 連携
 
