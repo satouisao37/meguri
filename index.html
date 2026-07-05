@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>めぐり</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="label">ROUTE PWA</p>
+      <h1>めぐり</h1>
+    </div>
+    <div class="header-actions">
+      <button type="button" id="exportBtn">JSON 書き出し</button>
+      <label class="file-btn">JSON 読み込み<input id="importInput" type="file" accept="application/json"></label>
+      <button type="button" id="clearBtn">全消去</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel setup-panel" aria-labelledby="setupTitle">
+      <div class="section-head">
+        <h2 id="setupTitle">出発設定</h2>
+        <span id="saveState" class="status">保存済み</span>
+      </div>
+      <div class="grid two">
+        <label>出発地名<input id="departureName" type="text" placeholder="京都駅"></label>
+        <label>出発時刻<input id="departTime" type="time" value="09:00"></label>
+      </div>
+      <div class="search-row">
+        <input id="departureSearch" type="search" placeholder="出発地を検索">
+        <button type="button" id="departureSearchBtn">検索</button>
+        <button type="button" id="geoBtn">現在地</button>
+      </div>
+      <div id="departureResults" class="results"></div>
+      <div class="grid two">
+        <label>緯度<input id="departureLat" type="number" step="0.000001"></label>
+        <label>経度<input id="departureLng" type="number" step="0.000001"></label>
+      </div>
+      <div class="segmented" role="group" aria-label="移動モード">
+        <button type="button" data-mode="car" class="active">車</button>
+        <button type="button" data-mode="transit">公共交通</button>
+      </div>
+      <label class="check"><input id="returnToStart" type="checkbox"> 出発地に戻る</label>
+    </section>
+
+    <section class="panel add-panel" aria-labelledby="addTitle">
+      <div class="section-head">
+        <h2 id="addTitle">場所追加</h2>
+        <span class="status">上限 15 件</span>
+      </div>
+      <div class="search-row">
+        <input id="placeSearch" type="search" placeholder="地名または 緯度,経度">
+        <button type="button" id="placeSearchBtn">検索</button>
+        <button type="button" id="addCoordBtn">座標追加</button>
+      </div>
+      <div id="placeResults" class="results"></div>
+    </section>
+
+    <section class="panel actions-panel">
+      <button type="button" id="optimizeBtn" class="primary">最適ルート計算</button>
+      <p id="message" class="message"></p>
+    </section>
+
+    <section class="panel summary-panel" aria-labelledby="summaryTitle">
+      <div class="section-head">
+        <h2 id="summaryTitle">サマリ</h2>
+        <span id="matrixBadge" class="badge">未計算</span>
+      </div>
+      <div id="summary" class="summary-grid"></div>
+    </section>
+
+    <section class="panel map-panel" aria-labelledby="mapTitle">
+      <div class="section-head">
+        <h2 id="mapTitle">ミニ地図</h2>
+        <span class="status">緯度経度 bbox 正規化</span>
+      </div>
+      <div id="miniMap" class="mini-map"></div>
+    </section>
+
+    <section class="panel places-panel" aria-labelledby="placesTitle">
+      <div class="section-head">
+        <h2 id="placesTitle">訪問順</h2>
+        <span id="placeCount" class="status">0 件</span>
+      </div>
+      <div id="timeline" class="timeline"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>v1.0.0</span>
+    <span>地名検索 © OpenStreetMap contributors</span>
+    <span>公共交通は距離ベースの目安です。</span>
+  </footer>
+
+  <script src="js/logic.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
