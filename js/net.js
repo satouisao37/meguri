@@ -31,8 +31,25 @@
 
   function writeCache(key, matrix) {
     try {
+      pruneExpiredCache();
       localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), matrix: matrix }));
     } catch (e) {}
+  }
+
+  function pruneExpiredCache() {
+    var now = Date.now();
+    var remove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!key || key.indexOf(CACHE_KEY_PREFIX) !== 0) continue;
+      try {
+        var item = JSON.parse(localStorage.getItem(key));
+        if (!item || !item.savedAt || now - item.savedAt > CACHE_TTL_MS) remove.push(key);
+      } catch (e) {
+        remove.push(key);
+      }
+    }
+    for (var r = 0; r < remove.length; r++) localStorage.removeItem(remove[r]);
   }
 
   function searchNominatim(query) {

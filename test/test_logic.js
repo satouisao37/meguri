@@ -81,6 +81,34 @@ for (var i = 0; i < 16; i++) {
 }
 assert('16件は拒否', L.optimizeRoute({ departure: kyoto, places: many }).ok === false);
 
+var normalized = L.normalizePlan({
+  mode: 'walk',
+  returnToStart: true,
+  places: [
+    { id: 9, name: 123, lat: '35.1', lng: '135.1', desired: '9:00', stayMin: -5, memo: 456 },
+    { name: '欠落', lat: '', lng: 135, desired: '10:00', stayMin: 20 },
+    { name: '有効', lat: 35.2, lng: 135.2, desired: '10:30', stayMin: '40', memo: null }
+  ]
+}, {
+  departure: kyoto,
+  departTime: '08:00',
+  mode: 'transit',
+  returnToStart: false,
+  manualOrder: false,
+  updatedAt: 'default'
+});
+
+assert('normalizePlan は不正 mode を car にする', normalized.mode === 'car');
+assert('normalizePlan は既定出発地を補完', normalized.departure.name === '京都駅');
+assert('normalizePlan は不正地点を除外', normalized.places.length === 2);
+assert('normalizePlan は name と memo を文字列化', normalized.places[0].name === '123' && normalized.places[0].memo === '456');
+assert('normalizePlan は不正 desired を null にする', normalized.places[0].desired === null);
+assert('normalizePlan は stayMin を既定値にする', normalized.places[0].stayMin === 60);
+assert('normalizePlan は有効 desired と stayMin を維持', normalized.places[1].desired === '10:30' && normalized.places[1].stayMin === 40);
+
+var filled = L.normalizePlan({ places: [] }, { departure: kyoto, departTime: '08:00', mode: 'transit', places: [kiyomizu] });
+assert('normalizePlan は top-level 欠損キーを補完', filled.departTime === '08:00' && filled.mode === 'transit' && filled.departure.name === '京都駅');
+
 if (failures) {
   console.log('失敗: ' + failures);
   $.exit(1);

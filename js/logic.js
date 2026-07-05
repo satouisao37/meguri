@@ -227,12 +227,13 @@
     for (var i = 0; i < places.length; i++) remaining.push(i);
     var order = [];
     var from = 0;
+    var points = buildPointList(departure, places);
     while (remaining.length) {
       var bestAt = 0;
       var bestCost = Infinity;
       for (var r = 0; r < remaining.length; r++) {
         var idx = remaining[r];
-        var cost = durationFromMatrix(matrix, from, idx + 1, buildPointList(departure, places), input.mode);
+        var cost = durationFromMatrix(matrix, from, idx + 1, points, input.mode);
         if (places[idx].desired) {
           var desired = timeToMin(places[idx].desired);
           if (desired !== null) cost += desired * 0.001;
@@ -360,6 +361,77 @@
     return { lat: lat, lng: lng };
   }
 
+  function isDesiredTime(value) {
+    return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+  }
+
+  function stringValue(value, fallback) {
+    if (value === null || value === undefined) return fallback;
+    return String(value);
+  }
+
+  function finiteNumber(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    var n = Number(value);
+    return isFinite(n) ? n : null;
+  }
+
+  function normalizePoint(raw, fallback) {
+    var source = raw || {};
+    var lat = finiteNumber(source.lat);
+    var lng = finiteNumber(source.lng);
+    if (lat === null || lng === null) {
+      lat = finiteNumber(fallback && fallback.lat);
+      lng = finiteNumber(fallback && fallback.lng);
+    }
+    if (lat === null || lng === null) return null;
+    return {
+      name: stringValue(source.name, stringValue(fallback && fallback.name, '出発地')),
+      lat: lat,
+      lng: lng
+    };
+  }
+
+  function normalizePlace(raw, index) {
+    var source = raw || {};
+    var lat = finiteNumber(source.lat);
+    var lng = finiteNumber(source.lng);
+    if (lat === null || lng === null) return null;
+    var stay = finiteNumber(source.stayMin);
+    if (stay === null || stay < 0) stay = 60;
+    return {
+      id: stringValue(source.id, 'p' + index),
+      name: stringValue(source.name, ''),
+      lat: lat,
+      lng: lng,
+      desired: isDesiredTime(source.desired) ? source.desired : null,
+      stayMin: Math.round(stay),
+      memo: stringValue(source.memo, '')
+    };
+  }
+
+  function normalizePlan(raw, defaults) {
+    var source = raw || {};
+    var base = defaults || {};
+    var defaultDeparture = base.departure || { name: '京都駅', lat: 34.9858, lng: 135.7588 };
+    var departure = normalizePoint(source.departure, defaultDeparture) || normalizePoint(defaultDeparture, null);
+    var sourcePlaces = source.places instanceof Array ? source.places : (base.places instanceof Array ? base.places : []);
+    var places = [];
+    for (var i = 0; i < sourcePlaces.length; i++) {
+      var place = normalizePlace(sourcePlaces[i], i);
+      if (place) places.push(place);
+    }
+    return {
+      departure: departure,
+      departTime: isDesiredTime(source.departTime) ? source.departTime : (isDesiredTime(base.departTime) ? base.departTime : '09:00'),
+      mode: source.mode === 'transit' || source.mode === 'car' ? source.mode : (source.mode === undefined && base.mode === 'transit' ? 'transit' : 'car'),
+      returnToStart: typeof source.returnToStart === 'boolean' ? source.returnToStart : !!base.returnToStart,
+      places: places,
+      manualOrder: typeof source.manualOrder === 'boolean' ? source.manualOrder : !!base.manualOrder,
+      updatedAt: stringValue(source.updatedAt, stringValue(base.updatedAt, ''))
+    };
+  }
+
   global.MeguriLogic = {
     MAX_OPTIMIZE_PLACES: MAX_OPTIMIZE_PLACES,
     haversineKm: haversineKm,
@@ -370,6 +442,7 @@
     estimateMatrix: estimateMatrix,
     scheduleRoute: scheduleRoute,
     optimizeRoute: optimizeRoute,
-    normalizeLatLng: normalizeLatLng
+    normalizeLatLng: normalizeLatLng,
+    normalizePlan: normalizePlan
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

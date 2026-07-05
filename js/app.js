@@ -4,7 +4,7 @@
   var STORAGE_KEY = 'meguri.plan.v1';
   var L = globalThis.MeguriLogic;
   var Net = globalThis.MeguriNet;
-  var state = {
+  var DEFAULT_PLAN = {
     departure: { name: '京都駅', lat: 34.9858, lng: 135.7588 },
     departTime: '09:00',
     mode: 'car',
@@ -13,6 +13,7 @@
     manualOrder: false,
     updatedAt: new Date().toISOString()
   };
+  var state = L.normalizePlan(DEFAULT_PLAN, DEFAULT_PLAN);
   var lastSchedule = null;
   var matrixInfo = { label: '未計算', approximate: false };
 
@@ -29,9 +30,9 @@
   function load() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) state = Object.assign(state, JSON.parse(raw));
+      if (raw) state = L.normalizePlan(JSON.parse(raw), DEFAULT_PLAN);
     } catch (e) {
-      setMessage('保存データを読み込めませんでした。');
+      state = L.normalizePlan(DEFAULT_PLAN, DEFAULT_PLAN);
     }
   }
 
@@ -164,16 +165,36 @@
         '<div class="stop-top"><input class="name" data-field="name" data-index="' + i + '" value="' + escapeAttr(place.name) + '">' +
         '<div class="move"><button type="button" data-up="' + i + '">↑</button><button type="button" data-down="' + i + '">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
         '<div class="grid four">' +
-        '<label>希望<input type="time" data-field="desired" data-index="' + i + '" value="' + (place.desired || '') + '"></label>' +
-        '<label>滞在分<input type="number" min="0" step="5" data-field="stayMin" data-index="' + i + '" value="' + place.stayMin + '"></label>' +
-        '<label>緯度<input type="number" step="0.000001" data-field="lat" data-index="' + i + '" value="' + place.lat + '"></label>' +
-        '<label>経度<input type="number" step="0.000001" data-field="lng" data-index="' + i + '" value="' + place.lng + '"></label>' +
+        '<label>希望<input type="time" data-field="desired" data-index="' + i + '" value="' + escapeAttr(place.desired || '') + '"></label>' +
+        '<label>滞在分<input type="number" min="0" step="5" data-field="stayMin" data-index="' + i + '" value="' + escapeAttr(place.stayMin) + '"></label>' +
+        '<label>緯度<input type="number" step="0.000001" data-field="lat" data-index="' + i + '" value="' + escapeAttr(place.lat) + '"></label>' +
+        '<label>経度<input type="number" step="0.000001" data-field="lng" data-index="' + i + '" value="' + escapeAttr(place.lng) + '"></label>' +
         '</div>' +
         '<label>メモ<textarea data-field="memo" data-index="' + i + '">' + escapeHtml(place.memo || '') + '</textarea></label>' +
         renderStopMetrics(stop, leg, link) +
         '</div>';
       timeline.appendChild(article);
     }
+    renderReturnLeg(timeline);
+  }
+
+  function renderReturnLeg(timeline) {
+    if (!lastSchedule || !lastSchedule.returnLeg) return;
+    var from = state.places[state.places.length - 1];
+    var link = googleLink(from, state.departure);
+    var article = document.createElement('article');
+    article.className = 'stop return-stop';
+    article.innerHTML =
+      '<div class="rail"><span>R</span></div>' +
+      '<div class="stop-body">' +
+      '<div class="stop-top"><strong>' + escapeHtml(state.departure.name || '出発地') + '</strong></div>' +
+      '<div class="metrics">' +
+      '<span>帰路</span>' +
+      '<span>移動 ' + fmtMin(lastSchedule.returnLeg.travelMin) + '</span>' +
+      '<a href="' + link + '" target="_blank" rel="noopener">Google マップ</a>' +
+      '</div>' +
+      '</div>';
+    timeline.appendChild(article);
   }
 
   function renderStopMetrics(stop, leg, link) {
@@ -345,6 +366,8 @@
       save();
       setMessage('計算しました。');
       render();
+    }).catch(function () {
+      setMessage('計算に失敗しました。');
     });
   }
 
@@ -397,8 +420,7 @@
       reader.onload = function () {
         try {
           var next = JSON.parse(String(reader.result));
-          if (!next.departure || !next.places) throw new Error('形式が違います');
-          state = next;
+          state = L.normalizePlan(next, DEFAULT_PLAN);
           lastSchedule = null;
           save();
           render();
@@ -435,8 +457,26 @@
       var index = Number(target.getAttribute('data-index'));
       var field = target.getAttribute('data-field');
       if (!field || !state.places[index]) return;
-      state.places[index][field] = field === 'stayMin' || field === 'lat' || field === 'lng' ? Number(target.value) : (target.value || null);
-      if (field === 'memo' && target.value === '') state.places[index][field] = '';
+      var value = target.value;
+      if (field === 'lat' || field === 'lng') {
+        var coord = Number(value);
+        if (!value.trim() || !isFinite(coord)) {
+          render();
+          return;
+        }
+        state.places[index][field] = coord;
+      } else if (field === 'stayMin') {
+        var stay = Number(value);
+        if (!value.trim() || !isFinite(stay) || stay < 0) {
+          render();
+          return;
+        }
+        state.places[index][field] = Math.round(stay);
+      } else if (field === 'desired') {
+        state.places[index][field] = value || null;
+      } else {
+        state.places[index][field] = String(value);
+      }
       state.manualOrder = true;
       lastSchedule = null;
       save();
