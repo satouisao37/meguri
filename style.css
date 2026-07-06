@@ -324,6 +324,31 @@ textarea {
   color: var(--rz-warn);
 }
 
+.route-actions:not(:empty) {
+  margin-top: 12px;
+}
+
+.route-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--rz-surface);
+  color: var(--line);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.route-open:hover {
+  background: var(--rz-surface-2);
+}
+
+.route-note {
+  font-size: 0.75rem;
+}
+
 .timeline {
   display: grid;
   gap: 0;

@@ -3,6 +3,8 @@
 (function (global) {
   var MAX_OPTIMIZE_PLACES = 15;
   var MIN_PER_DAY = 1440;
+  // Google マップ api=1 の directions URL が受け付ける経由地(waypoints)の上限
+  var MAX_WAYPOINTS = 9;
 
   function clampNumber(value, fallback) {
     var n = Number(value);
@@ -410,6 +412,32 @@
     };
   }
 
+  // 全行程を1本の経路として開く Google マップ深リンクを組み立てる純粋関数。
+  // 経由地(出発地・目的地を除く中間地点。帰路ありなら全訪問地が経由地)が
+  // MAX_WAYPOINTS を超える、または訪問地が無いときは null(=全行程リンクを作らない)。
+  function buildRouteUrl(opts) {
+    var options = opts || {};
+    var departure = options.departure;
+    var places = options.places instanceof Array ? options.places : [];
+    if (!departure || !places.length) return null;
+    var travelMode = options.mode === 'transit' ? 'transit' : 'driving';
+    var returnToStart = !!options.returnToStart;
+    var destination = returnToStart ? departure : places[places.length - 1];
+    var waypoints = returnToStart ? places.slice() : places.slice(0, places.length - 1);
+    if (waypoints.length > MAX_WAYPOINTS) return null;
+    function coord(point) {
+      return encodeURIComponent(clampNumber(point.lat, 0) + ',' + clampNumber(point.lng, 0));
+    }
+    var url = 'https://www.google.com/maps/dir/?api=1' +
+      '&origin=' + coord(departure) +
+      '&destination=' + coord(destination) +
+      '&travelmode=' + travelMode;
+    if (waypoints.length) {
+      url += '&waypoints=' + waypoints.map(coord).join('%7C');
+    }
+    return url;
+  }
+
   function normalizePlan(raw, defaults) {
     var source = raw || {};
     var base = defaults || {};
@@ -434,6 +462,7 @@
 
   global.MeguriLogic = {
     MAX_OPTIMIZE_PLACES: MAX_OPTIMIZE_PLACES,
+    MAX_WAYPOINTS: MAX_WAYPOINTS,
     haversineKm: haversineKm,
     transitEstimateMin: transitEstimateMin,
     carFallbackMin: carFallbackMin,
@@ -443,6 +472,7 @@
     scheduleRoute: scheduleRoute,
     optimizeRoute: optimizeRoute,
     normalizeLatLng: normalizeLatLng,
-    normalizePlan: normalizePlan
+    normalizePlan: normalizePlan,
+    buildRouteUrl: buildRouteUrl
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

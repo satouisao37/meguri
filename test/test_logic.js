@@ -75,6 +75,34 @@ assert('希望時刻を考慮して二条城を先にする', optimized.places[0
 assert('全順列のスケジュールを返す', optimized.schedule.stops.length === 3);
 assert('並べ替え後も行列インデックスを維持', optimized.schedule.legs[0].travelMin === 10);
 
+function enc(p) {
+  return encodeURIComponent(p.lat + ',' + p.lng);
+}
+
+var routeUrl = L.buildRouteUrl({ departure: kyoto, places: [kiyomizu, nijo, arashiyama], returnToStart: false, mode: 'car' });
+assert('全行程URLは api=1 の driving', routeUrl.indexOf('api=1') !== -1 && routeUrl.indexOf('travelmode=driving') !== -1);
+assert('全行程URLの出発地は origin', routeUrl.indexOf('origin=' + enc(kyoto)) !== -1);
+assert('全行程URLの目的地は最終訪問地', routeUrl.indexOf('destination=' + enc(arashiyama)) !== -1);
+assert('全行程URLの経由地は中間地点', routeUrl.indexOf('waypoints=' + enc(kiyomizu) + '%7C' + enc(nijo)) !== -1);
+
+var loopUrl = L.buildRouteUrl({ departure: kyoto, places: [kiyomizu, nijo, arashiyama], returnToStart: true, mode: 'car' });
+assert('帰路ありは目的地が出発地', loopUrl.indexOf('destination=' + enc(kyoto)) !== -1);
+assert('帰路ありは全訪問地が経由地', loopUrl.indexOf('waypoints=' + enc(kiyomizu) + '%7C' + enc(nijo) + '%7C' + enc(arashiyama)) !== -1);
+
+var oneUrl = L.buildRouteUrl({ departure: kyoto, places: [kiyomizu], returnToStart: false, mode: 'car' });
+assert('単一地点は waypoints 無し', oneUrl.indexOf('waypoints=') === -1 && oneUrl.indexOf('destination=' + enc(kiyomizu)) !== -1);
+
+var transitUrl = L.buildRouteUrl({ departure: kyoto, places: [kiyomizu], mode: 'transit' });
+assert('公共交通は travelmode=transit', transitUrl.indexOf('travelmode=transit') !== -1);
+
+var overWaypoints = [];
+for (var w = 0; w < 11; w++) {
+  overWaypoints.push({ id: 'w' + w, name: 'w' + w, lat: 35 + w * 0.01, lng: 135, desired: null, stayMin: 10, memo: '' });
+}
+assert('経由地9件は全行程URLを作る', L.buildRouteUrl({ departure: kyoto, places: overWaypoints.slice(0, 10), returnToStart: false, mode: 'car' }) !== null);
+assert('経由地10件は全行程URLを作らない', L.buildRouteUrl({ departure: kyoto, places: overWaypoints, returnToStart: false, mode: 'car' }) === null);
+assert('訪問地が無ければ null', L.buildRouteUrl({ departure: kyoto, places: [], mode: 'car' }) === null);
+
 var many = [];
 for (var i = 0; i < 16; i++) {
   many.push({ id: 'x' + i, name: '地点' + i, lat: 35 + i * 0.001, lng: 135, desired: null, stayMin: 10, memo: '' });

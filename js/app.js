@@ -130,6 +130,29 @@
     ].join('');
   }
 
+  function renderRouteActions() {
+    var target = $('routeActions');
+    if (!target) return;
+    // 全行程リンクは「計算後・車モード」のみ表示する。
+    // 公共交通は Google マップの waypoints が実質使えないため区間リンクに任せる。
+    if (!lastSchedule || state.mode !== 'car') {
+      target.innerHTML = '';
+      return;
+    }
+    var url = L.buildRouteUrl({
+      departure: state.departure,
+      places: state.places,
+      returnToStart: state.returnToStart,
+      mode: state.mode
+    });
+    if (url) {
+      target.innerHTML = '<a class="route-open" href="' + url + '" target="_blank" rel="noopener">全行程をマップで開く</a>';
+    } else {
+      // 経由地が Google マップの上限(9件)を超えたとき
+      target.innerHTML = '<p class="muted route-note">経由地が ' + L.MAX_WAYPOINTS + ' 件を超えるため全行程リンクは作れません。各区間の Google マップリンクをご利用ください。</p>';
+    }
+  }
+
   function stopInfoByPlaceId(id) {
     if (!lastSchedule) return null;
     for (var i = 0; i < lastSchedule.stops.length; i++) {
@@ -289,6 +312,7 @@
     document.body.classList.toggle('mode-transit', state.mode === 'transit');
     syncInputs();
     renderSummary();
+    renderRouteActions();
     renderPlaces();
     renderMap();
   }
