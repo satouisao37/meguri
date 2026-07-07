@@ -16,6 +16,8 @@
   var state = L.normalizePlan(DEFAULT_PLAN, DEFAULT_PLAN);
   var lastSchedule = null;
   var matrixInfo = { label: '未計算', approximate: false };
+  var lastDeletedPlace = null;
+  var toastTimer = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -106,10 +108,57 @@
   }
 
   function deletePlace(index) {
-    state.places.splice(index, 1);
+    var removed = state.places.splice(index, 1)[0];
+    if (!removed) return;
+    lastDeletedPlace = { place: removed, index: index };
     lastSchedule = null;
     save();
     render();
+    showUndoToast();
+  }
+
+  function hideToast() {
+    var toast = $('toast');
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    if (toast) {
+      toast.classList.remove('show');
+      toast.innerHTML = '';
+    }
+  }
+
+  function restoreDeletedPlace() {
+    if (!lastDeletedPlace) return;
+    var restore = lastDeletedPlace;
+    lastDeletedPlace = null;
+    state.places.splice(Math.min(restore.index, state.places.length), 0, restore.place);
+    state.manualOrder = true;
+    lastSchedule = null;
+    save();
+    render();
+    hideToast();
+  }
+
+  function showUndoToast() {
+    var toast = $('toast');
+    if (!toast) return;
+    if (toastTimer) clearTimeout(toastTimer);
+    toast.innerHTML = '';
+    var text = document.createElement('span');
+    var button = document.createElement('button');
+    text.textContent = '削除しました';
+    button.type = 'button';
+    button.textContent = '元に戻す';
+    button.addEventListener('click', restoreDeletedPlace);
+    toast.appendChild(text);
+    toast.appendChild(button);
+    toast.classList.add('show');
+    toastTimer = setTimeout(function () {
+      lastDeletedPlace = null;
+      hideToast();
+    }, 6000);
   }
 
   function googleLink(from, to) {
