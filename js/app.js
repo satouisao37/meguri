@@ -493,8 +493,8 @@
       save();
       setMessage('計算しました。');
       render();
-    }).catch(function () {
-      setMessage('計算に失敗しました。');
+    }).catch(function (err) {
+      setMessage('計算に失敗しました: ' + (err && err.message ? err.message : String(err)));
     }).finally(function () {
       setCalcBusy(false);
     });
@@ -532,8 +532,8 @@
       save();
       setMessage('この並び順で計算しました。');
       render();
-    }).catch(function () {
-      setMessage('計算に失敗しました。');
+    }).catch(function (err) {
+      setMessage('計算に失敗しました: ' + (err && err.message ? err.message : String(err)));
     }).finally(function () {
       setCalcBusy(false);
     });
