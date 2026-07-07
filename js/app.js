@@ -389,6 +389,18 @@
     });
   }
 
+  // 起動時の自動計算用: ネットワークを叩かず行列を用意する。
+  // 公共交通=目安式、車=OSRM キャッシュがあれば使い、無ければ概算。
+  function buildMatrixFromCache() {
+    var points = [state.departure].concat(state.places);
+    if (state.mode === 'transit') {
+      return { matrix: L.estimateMatrix(points, 'transit'), label: '目安', approximate: true };
+    }
+    var cached = Net.readOsrmMatrix(points);
+    if (cached) return { matrix: cached, label: 'OSRM キャッシュ', approximate: false };
+    return { matrix: L.estimateMatrix(points, 'car'), label: '概算', approximate: true };
+  }
+
   function optimize() {
     updateFromInputs();
     if (!isFinite(state.departure.lat) || !isFinite(state.departure.lng)) {
@@ -430,6 +442,19 @@
     });
   }
 
+  // 現在の並び順のまま(並べ替えず)時刻を計算し lastSchedule / matrixInfo に反映する。
+  function applySchedule(info) {
+    lastSchedule = L.scheduleRoute({
+      departure: state.departure,
+      departTime: state.departTime,
+      mode: state.mode,
+      returnToStart: state.returnToStart,
+      places: state.places,
+      matrix: info.matrix
+    });
+    matrixInfo = { label: info.label, approximate: info.approximate };
+  }
+
   // 現在の並び順(手動調整済み)を守ったまま時刻だけ再計算する。
   // optimize と違い state.places を並べ替えず、manualOrder も true のまま維持する。
   function recalcSchedule() {
@@ -444,21 +469,21 @@
     }
     setMessage('計算中です。');
     buildMatrix().then(function (info) {
-      lastSchedule = L.scheduleRoute({
-        departure: state.departure,
-        departTime: state.departTime,
-        mode: state.mode,
-        returnToStart: state.returnToStart,
-        places: state.places,
-        matrix: info.matrix
-      });
-      matrixInfo = { label: info.label, approximate: info.approximate };
+      applySchedule(info);
       save();
       setMessage('この並び順で計算しました。');
       render();
     }).catch(function () {
       setMessage('計算に失敗しました。');
     });
+  }
+
+  // 起動時に現在の順序のまま自動計算する(順序は変えない・ネットワーク不使用)。
+  // 表示のためだけの計算なので updatedAt を動かさないよう save は呼ばない。
+  function autoSchedule() {
+    if (!state.places.length) return;
+    if (!isFinite(state.departure.lat) || !isFinite(state.departure.lng)) return;
+    applySchedule(buildMatrixFromCache());
   }
 
   function bind() {
@@ -578,6 +603,7 @@
   load();
   document.addEventListener('DOMContentLoaded', function () {
     bind();
+    autoSchedule();
     render();
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(function () {});

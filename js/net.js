@@ -100,9 +100,20 @@
     });
   }
 
+  // フェッチせずキャッシュだけを読む(起動時の自動計算用)。ヒットすれば要求順へ
+  // 並べ戻した行列、無ければ null。ネットワークは一切叩かない。
+  function readOsrmMatrix(points) {
+    var order = L.canonicalOrder(points);
+    var canon = order.map(function (i) { return points[i]; });
+    var cached = readCache(matrixCacheKey(canon));
+    if (cached && cached.length === canon.length) return L.permuteMatrix(cached, order);
+    return null;
+  }
+
   global.MeguriNet = {
     searchNominatim: searchNominatim,
     fetchOsrmMatrix: fetchOsrmMatrix,
+    readOsrmMatrix: readOsrmMatrix,
     matrixCacheKey: matrixCacheKey
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
