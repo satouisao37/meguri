@@ -80,6 +80,11 @@ button:hover,
   background: var(--rz-surface-2);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
@@ -331,6 +336,39 @@ textarea {
   min-height: 22px;
   margin-top: 8px;
   color: var(--rz-warn);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  border: 1px solid var(--rz-border-strong);
+  border-radius: 4px;
+  background: var(--rz-surface);
+  color: var(--rz-text);
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--rz-text) 18%, transparent);
+  opacity: 0;
+  transform: translate(-50%, 12px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.toast button {
+  border-color: var(--line);
+  color: var(--line);
+  font-weight: 700;
 }
 
 .route-actions:not(:empty) {

@@ -54,14 +54,15 @@
   }
 
   function searchNominatim(query) {
-    var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ja&q=' + encodeURIComponent(query);
+    var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ja&countrycodes=jp&q=' + encodeURIComponent(query);
     return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (response) {
       if (!response.ok) throw new Error('地名検索に失敗しました');
       return response.json();
     }).then(function (items) {
       return items.map(function (item) {
         return {
-          name: item.display_name,
+          name: L.shortenDisplayName(item.display_name),
+          full: item.display_name,
           lat: Number(item.lat),
           lng: Number(item.lon)
         };

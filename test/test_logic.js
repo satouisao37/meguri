@@ -37,6 +37,13 @@ assert('時刻パース', L.timeToMin('09:05') === 545);
 assert('時刻フォーマット', L.minToTime(24 * 60 + 75) === '01:15');
 assert('緯度経度入力を解釈', L.normalizeLatLng('35.0, 135.5').lat === 35);
 assert('不正緯度経度は null', L.normalizeLatLng('999, 135') === null);
+assert('短い display_name はそのまま', L.shortenDisplayName('京都駅') === '京都駅');
+var shortenedMulti = L.shortenDisplayName('清水寺, 東山区, 京都市, 京都府, 日本');
+assert('長い display_name は24字以内', shortenedMulti.length <= 24);
+assert('長い display_name は先頭セグメントを残す', shortenedMulti.indexOf('清水寺') === 0);
+var shortenedOne = L.shortenDisplayName('とても長い名前の観光施設と展示エリア全体を含む複合施設');
+assert('1セグメント超長は省略記号付き24字', shortenedOne.length === 24 && shortenedOne.slice(-1) === '…');
+assert('空 display_name は空文字', L.shortenDisplayName('  ') === '' && L.shortenDisplayName(null) === '');
 
 var matrix = [
   [0, 20, 10, 60],

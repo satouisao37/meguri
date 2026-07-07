@@ -410,6 +410,29 @@
     return { lat: lat, lng: lng };
   }
 
+  // Nominatim の長い display_name を候補表示向けに先頭セグメント中心で短くする。
+  function shortenDisplayName(displayName) {
+    if (typeof displayName !== 'string') return '';
+    var text = displayName.trim();
+    if (!text) return '';
+    var limit = 24;
+    var rawParts = text.split(',');
+    var parts = [];
+    for (var i = 0; i < rawParts.length; i++) {
+      var part = rawParts[i].trim();
+      if (part) parts.push(part);
+    }
+    if (!parts.length) return '';
+    if (parts[0].length > limit) return parts[0].slice(0, limit - 1) + '…';
+    var chosen = parts[0];
+    for (var p = 1; p < parts.length; p++) {
+      var next = chosen + ', ' + parts[p];
+      if (next.length > limit) break;
+      chosen = next;
+    }
+    return chosen;
+  }
+
   function isDesiredTime(value) {
     return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   }
@@ -522,6 +545,7 @@
     scheduleRoute: scheduleRoute,
     optimizeRoute: optimizeRoute,
     normalizeLatLng: normalizeLatLng,
+    shortenDisplayName: shortenDisplayName,
     normalizePlan: normalizePlan,
     buildRouteUrl: buildRouteUrl
   };

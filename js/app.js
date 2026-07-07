@@ -16,6 +16,8 @@
   var state = L.normalizePlan(DEFAULT_PLAN, DEFAULT_PLAN);
   var lastSchedule = null;
   var matrixInfo = { label: '未計算', approximate: false };
+  var lastDeletedPlace = null;
+  var toastTimer = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -38,6 +40,11 @@
 
   function setMessage(text) {
     $('message').textContent = text || '';
+  }
+
+  function setCalcBusy(busy) {
+    $('optimizeBtn').disabled = !!busy;
+    $('scheduleBtn').disabled = !!busy;
   }
 
   function fmtMin(min) {
@@ -106,10 +113,57 @@
   }
 
   function deletePlace(index) {
-    state.places.splice(index, 1);
+    var removed = state.places.splice(index, 1)[0];
+    if (!removed) return;
+    lastDeletedPlace = { place: removed, index: index };
     lastSchedule = null;
     save();
     render();
+    showUndoToast();
+  }
+
+  function hideToast() {
+    var toast = $('toast');
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    if (toast) {
+      toast.classList.remove('show');
+      toast.innerHTML = '';
+    }
+  }
+
+  function restoreDeletedPlace() {
+    if (!lastDeletedPlace) return;
+    var restore = lastDeletedPlace;
+    lastDeletedPlace = null;
+    state.places.splice(Math.min(restore.index, state.places.length), 0, restore.place);
+    state.manualOrder = true;
+    lastSchedule = null;
+    save();
+    render();
+    hideToast();
+  }
+
+  function showUndoToast() {
+    var toast = $('toast');
+    if (!toast) return;
+    if (toastTimer) clearTimeout(toastTimer);
+    toast.innerHTML = '';
+    var text = document.createElement('span');
+    var button = document.createElement('button');
+    text.textContent = '削除しました';
+    button.type = 'button';
+    button.textContent = '元に戻す';
+    button.addEventListener('click', restoreDeletedPlace);
+    toast.appendChild(text);
+    toast.appendChild(button);
+    toast.classList.add('show');
+    toastTimer = setTimeout(function () {
+      lastDeletedPlace = null;
+      hideToast();
+    }, 6000);
   }
 
   function googleLink(from, to) {
@@ -293,11 +347,22 @@
     var pad = 36;
     var w = 420;
     var h = 220;
+    var availW = w - pad * 2;
+    var availH = h - pad * 2;
+    var midLat = (minLat + maxLat) / 2;
+    var cosLat = Math.cos(midLat * Math.PI / 180);
+    var lngGeoSpan = (maxLng - minLng) * cosLat;
+    var latSpan = maxLat - minLat;
+    var scale = Math.min(availW / (lngGeoSpan || 1e-9), availH / (latSpan || 1e-9));
+    var drawnW = lngGeoSpan * scale;
+    var drawnH = latSpan * scale;
+    var offsetX = pad + (availW - drawnW) / 2;
+    var offsetY = pad + (availH - drawnH) / 2;
     function x(p) {
-      return pad + ((p.lng - minLng) / ((maxLng - minLng) || 1)) * (w - pad * 2);
+      return offsetX + ((p.lng - minLng) * cosLat) * scale;
     }
     function y(p) {
-      return h - pad - ((p.lat - minLat) / ((maxLat - minLat) || 1)) * (h - pad * 2);
+      return h - (offsetY + (p.lat - minLat) * scale);
     }
     var poly = points.map(function (p) { return x(p).toFixed(1) + ',' + y(p).toFixed(1); }).join(' ');
     var dots = points.map(function (p, idx) {
@@ -334,6 +399,7 @@
       (function (item) {
         var btn = document.createElement('button');
         btn.type = 'button';
+        if (item.full) btn.title = item.full;
         btn.textContent = item.name + ' / ' + item.lat.toFixed(5) + ',' + item.lng.toFixed(5);
         btn.addEventListener('click', function () {
           onPick(item);
@@ -416,6 +482,7 @@
       return;
     }
     setMessage('計算中です。');
+    setCalcBusy(true);
     buildMatrix().then(function (info) {
       var result = L.optimizeRoute({
         departure: state.departure,
@@ -437,8 +504,10 @@
       save();
       setMessage('計算しました。');
       render();
-    }).catch(function () {
-      setMessage('計算に失敗しました。');
+    }).catch(function (err) {
+      setMessage('計算に失敗しました: ' + (err && err.message ? err.message : String(err)));
+    }).finally(function () {
+      setCalcBusy(false);
     });
   }
 
@@ -468,13 +537,16 @@
       return;
     }
     setMessage('計算中です。');
+    setCalcBusy(true);
     buildMatrix().then(function (info) {
       applySchedule(info);
       save();
       setMessage('この並び順で計算しました。');
       render();
-    }).catch(function () {
-      setMessage('計算に失敗しました。');
+    }).catch(function (err) {
+      setMessage('計算に失敗しました: ' + (err && err.message ? err.message : String(err)));
+    }).finally(function () {
+      setCalcBusy(false);
     });
   }
 
