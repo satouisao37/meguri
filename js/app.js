@@ -91,7 +91,8 @@
       name: place.name || '地点',
       lat: Number(place.lat),
       lng: Number(place.lng),
-      desired: null,
+      open: null,
+      close: null,
       stayMin: 60,
       memo: ''
     });
@@ -255,7 +256,8 @@
         '<div class="move"><button type="button" data-up="' + i + '" aria-label="上へ">↑</button><button type="button" data-down="' + i + '" aria-label="下へ">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
         renderTimes(stop) +
         '<div class="grid two">' +
-        '<label>希望到着<input type="time" data-field="desired" data-index="' + i + '" value="' + escapeAttr(place.desired || '') + '"></label>' +
+        '<label>開始<input type="time" data-field="open" data-index="' + i + '" value="' + escapeAttr(place.open || '') + '"></label>' +
+        '<label>終了<input type="time" data-field="close" data-index="' + i + '" value="' + escapeAttr(place.close || '') + '"></label>' +
         '<label>滞在(分)<input type="number" min="0" step="5" data-field="stayMin" data-index="' + i + '" value="' + escapeAttr(place.stayMin) + '"></label>' +
         '</div>' +
         '<details class="more" data-place="' + escapeAttr(place.id) + '"' + (openDetails[place.id] ? ' open' : '') + '><summary>詳細(座標・メモ)</summary>' +
@@ -310,6 +312,7 @@
     var badges = '';
     if (stop.waitMin > 0) badges += '<span class="badge">待機 ' + fmtMin(stop.waitMin) + '</span>';
     if (stop.lateMin > 0) badges += '<span class="badge crit">遅刻 ' + fmtMin(stop.lateMin) + '</span>';
+    if (stop.stayEndsAfterClose) badges += '<span class="badge warn">閉店後まで滞在</span>';
     return '<div class="times">' +
       '<span>開始 ' + stop.start + '</span>' +
       '<span>出発 ' + stop.depart + '</span>' +
@@ -660,7 +663,7 @@
           return;
         }
         state.places[index][field] = Math.round(stay);
-      } else if (field === 'desired') {
+      } else if (field === 'open' || field === 'close') {
         state.places[index][field] = value || null;
       } else {
         state.places[index][field] = String(value);

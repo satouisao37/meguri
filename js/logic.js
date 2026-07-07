@@ -48,6 +48,23 @@
     return h * 60 + min;
   }
 
+  function resolveWindow(place, departMin) {
+    var source = place || {};
+    var open = timeToMin(source.open);
+    var close = timeToMin(source.close);
+    if (open === null && close === null && source.desired) {
+      var desired = timeToMin(source.desired);
+      if (desired !== null) {
+        open = desired;
+        close = desired;
+      }
+    }
+    if (open !== null && open < departMin - 720) open += MIN_PER_DAY;
+    if (close !== null && close < departMin - 720) close += MIN_PER_DAY;
+    if (open !== null && close !== null && close < open) close += MIN_PER_DAY;
+    return { open: open, close: close };
+  }
+
   function minToTime(total) {
     total = Math.round(clampNumber(total, 0));
     var day = ((total % MIN_PER_DAY) + MIN_PER_DAY) % MIN_PER_DAY;
@@ -103,10 +120,9 @@
       var travel = durationFromMatrix(matrix, previousIndex, toIndex, points, mode);
       var roundedTravel = Math.round(travel);
       var arrival = current + travel;
-      var desired = timeToMin(places[i].desired);
-      if (desired !== null && desired < departMin - 720) desired += MIN_PER_DAY;
-      var wait = desired !== null ? Math.max(0, desired - arrival) : 0;
-      var late = desired !== null ? Math.max(0, arrival - desired) : 0;
+      var window = resolveWindow(places[i], departMin);
+      var wait = window.open !== null ? Math.max(0, window.open - arrival) : 0;
+      var late = window.close !== null ? Math.max(0, arrival - window.close) : 0;
       var start = arrival + wait;
       var stay = Math.max(0, Math.round(clampNumber(places[i].stayMin, 0)));
       var depart = start + stay;
@@ -128,6 +144,9 @@
         depart: formatClock(depart),
         waitMin: Math.round(wait),
         lateMin: Math.round(late),
+        openMin: window.open,
+        closeMin: window.close,
+        stayEndsAfterClose: window.close !== null && late === 0 && depart > window.close,
         stayMin: stay
       });
       totalTravelMin += roundedTravel;
@@ -241,16 +260,16 @@
     var order = [];
     var from = 0;
     var points = buildPointList(departure, places);
+    var departMin = timeToMin(input.departTime) || 0;
     while (remaining.length) {
       var bestAt = 0;
       var bestCost = Infinity;
       for (var r = 0; r < remaining.length; r++) {
         var idx = remaining[r];
         var cost = durationFromMatrix(matrix, from, idx + 1, points, input.mode);
-        if (places[idx].desired) {
-          var desired = timeToMin(places[idx].desired);
-          if (desired !== null) cost += desired * 0.001;
-        }
+        var window = resolveWindow(places[idx], departMin);
+        var bias = window.close !== null ? window.close : window.open;
+        if (bias !== null) cost += bias * 0.001;
         cost += rng() * 0.01;
         if (cost < bestCost) {
           bestCost = cost;
@@ -471,12 +490,19 @@
     if (lat === null || lng === null) return null;
     var stay = finiteNumber(source.stayMin);
     if (stay === null || stay < 0) stay = 60;
+    var open = isDesiredTime(source.open) ? source.open : null;
+    var close = isDesiredTime(source.close) ? source.close : null;
+    if (open === null && close === null && isDesiredTime(source.desired)) {
+      open = source.desired;
+      close = source.desired;
+    }
     return {
       id: stringValue(source.id, 'p' + index),
       name: stringValue(source.name, ''),
       lat: lat,
       lng: lng,
-      desired: isDesiredTime(source.desired) ? source.desired : null,
+      open: open,
+      close: close,
       stayMin: Math.round(stay),
       memo: stringValue(source.memo, '')
     };
@@ -539,6 +565,7 @@
     timeToMin: timeToMin,
     minToTime: minToTime,
     formatClock: formatClock,
+    resolveWindow: resolveWindow,
     estimateMatrix: estimateMatrix,
     canonicalOrder: canonicalOrder,
     permuteMatrix: permuteMatrix,

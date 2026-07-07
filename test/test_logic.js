@@ -67,6 +67,47 @@ assert('遅刻を記録', schedule.stops[1].lateMin === 140);
 assert('帰路を総移動に含める', schedule.totalTravelMin === 65);
 assert('帰着時刻を計算', schedule.finishTime === '12:15');
 
+var desiredWindow = L.resolveWindow({ desired: '10:00' }, L.timeToMin('09:00'));
+assert('resolveWindow は desired を幅ゼロ窓にする', desiredWindow.open === 600 && desiredWindow.close === 600);
+var wrappedWindow = L.resolveWindow({ open: '23:30', close: '01:00' }, L.timeToMin('23:00'));
+assert('resolveWindow は深夜跨ぎ窓を解決する', wrappedWindow.open === 1410 && wrappedWindow.close === 1500);
+
+var earlyWindow = L.scheduleRoute({
+  departure: kyoto,
+  departTime: '08:00',
+  mode: 'car',
+  matrix: [[0, 30], [30, 0]],
+  places: [{ id: 'w1', name: '窓', lat: 35, lng: 135, open: '09:00', close: '17:00', stayMin: 0, memo: '' }]
+});
+assert('窓の開始前到着は待機する', earlyWindow.stops[0].waitMin === 30 && earlyWindow.stops[0].lateMin === 0);
+var lateWindow = L.scheduleRoute({
+  departure: kyoto,
+  departTime: '08:00',
+  mode: 'car',
+  matrix: [[0, 570], [570, 0]],
+  places: [{ id: 'w2', name: '窓', lat: 35, lng: 135, open: '09:00', close: '17:00', stayMin: 0, memo: '' }]
+});
+assert('窓の終了後到着は遅刻する', lateWindow.stops[0].waitMin === 0 && lateWindow.stops[0].lateMin === 30);
+var inWindow = L.scheduleRoute({
+  departure: kyoto,
+  departTime: '08:00',
+  mode: 'car',
+  matrix: [[0, 240], [240, 0]],
+  places: [{ id: 'w3', name: '窓', lat: 35, lng: 135, open: '09:00', close: '17:00', stayMin: 0, memo: '' }]
+});
+assert('窓の範囲内到着は待機も遅刻もない', inWindow.stops[0].waitMin === 0 && inWindow.stops[0].lateMin === 0);
+
+var overClose = L.scheduleRoute({
+  departure: kyoto,
+  departTime: '08:00',
+  mode: 'car',
+  matrix: [[0, 480], [480, 0]],
+  places: [{ id: 'c1', name: '閉店超過', lat: 35, lng: 135, open: '09:00', close: '17:00', stayMin: 90, memo: '' }]
+});
+assert('到着は間に合うが滞在が閉店を超える', overClose.stops[0].stayEndsAfterClose === true);
+assert('閉店後到着は滞在超過扱いにしない', lateWindow.stops[0].stayEndsAfterClose === false);
+assert('閉店前に出る場合は滞在超過にしない', inWindow.stops[0].stayEndsAfterClose === false);
+
 assert('formatClock 当日は素の時刻', L.formatClock(90) === '01:30');
 assert('formatClock 23:59 境界', L.formatClock(1439) === '23:59');
 assert('formatClock 翌0時', L.formatClock(1440) === '翌 00:00');
@@ -120,6 +161,23 @@ assert('最適化成功', optimized.ok === true);
 assert('希望時刻を考慮して二条城を先にする', optimized.places[0].id === 'p2');
 assert('全順列のスケジュールを返す', optimized.schedule.stops.length === 3);
 assert('並べ替え後も行列インデックスを維持', optimized.schedule.legs[0].travelMin === 10);
+
+var closeAvoid = L.optimizeRoute({
+  departure: kyoto,
+  departTime: '09:00',
+  mode: 'car',
+  returnToStart: false,
+  matrix: [
+    [0, 30, 10],
+    [30, 0, 10],
+    [10, 60, 0]
+  ],
+  places: [
+    { id: 'a', name: '早く閉まる場所', lat: 35.0, lng: 135.0, open: null, close: '10:00', stayMin: 0, memo: '' },
+    { id: 'b', name: '先に行くと危険な場所', lat: 35.1, lng: 135.1, open: null, close: null, stayMin: 60, memo: '' }
+  ]
+});
+assert('閉店に間に合う順序を優先する', closeAvoid.places[0].id === 'a' && closeAvoid.schedule.stops[0].lateMin === 0);
 
 function enc(p) {
   return encodeURIComponent(p.lat + ',' + p.lng);
@@ -176,9 +234,34 @@ assert('normalizePlan は不正 mode を car にする', normalized.mode === 'ca
 assert('normalizePlan は既定出発地を補完', normalized.departure.name === '京都駅');
 assert('normalizePlan は不正地点を除外', normalized.places.length === 2);
 assert('normalizePlan は name と memo を文字列化', normalized.places[0].name === '123' && normalized.places[0].memo === '456');
-assert('normalizePlan は不正 desired を null にする', normalized.places[0].desired === null);
+assert('normalizePlan は不正 desired を null 窓にする', normalized.places[0].open === null && normalized.places[0].close === null);
 assert('normalizePlan は stayMin を既定値にする', normalized.places[0].stayMin === 60);
-assert('normalizePlan は有効 desired と stayMin を維持', normalized.places[1].desired === '10:30' && normalized.places[1].stayMin === 40);
+assert('normalizePlan は有効 desired を open/close に移行する', normalized.places[1].open === '10:30' && normalized.places[1].close === '10:30' && !('desired' in normalized.places[1]));
+assert('normalizePlan は有効 stayMin を維持', normalized.places[1].stayMin === 40);
+
+var legacyPlan = {
+  departure: kyoto,
+  departTime: '09:00',
+  mode: 'car',
+  places: [{ id: 'legacy', name: '旧形式', lat: 35, lng: 135, desired: '10:00', stayMin: 20, memo: '' }]
+};
+var legacySchedule = L.scheduleRoute({
+  departure: legacyPlan.departure,
+  departTime: legacyPlan.departTime,
+  mode: legacyPlan.mode,
+  matrix: [[0, 30], [30, 0]],
+  places: legacyPlan.places
+});
+var migratedPlan = L.normalizePlan(legacyPlan, { departure: kyoto, departTime: '08:00', mode: 'transit' });
+var migratedSchedule = L.scheduleRoute({
+  departure: migratedPlan.departure,
+  departTime: migratedPlan.departTime,
+  mode: migratedPlan.mode,
+  matrix: [[0, 30], [30, 0]],
+  places: migratedPlan.places
+});
+assert('旧 desired プランは open/close に移行して desired を持たない', migratedPlan.places[0].open === '10:00' && migratedPlan.places[0].close === '10:00' && !('desired' in migratedPlan.places[0]));
+assert('旧 desired プランの移行前後でスコアが一致する', legacySchedule.score === migratedSchedule.score);
 
 var filled = L.normalizePlan({ places: [] }, { departure: kyoto, departTime: '08:00', mode: 'transit', places: [kiyomizu] });
 assert('normalizePlan は top-level 欠損キーを補完', filled.departTime === '08:00' && filled.mode === 'transit' && filled.departure.name === '京都駅');
