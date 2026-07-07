@@ -365,6 +365,42 @@
     return matrix;
   }
 
+  // 地点集合を座標で正準化した並び順(元インデックスの配列)を返す純粋関数。
+  // 配列順に依存しない行列キャッシュキーを作るための正準順序。経度→緯度→元順で安定ソート。
+  function canonicalOrder(points) {
+    var order = [];
+    for (var i = 0; i < points.length; i++) order.push(i);
+    order.sort(function (a, b) {
+      var la = clampNumber(points[a].lng, 0);
+      var lb = clampNumber(points[b].lng, 0);
+      if (la !== lb) return la - lb;
+      var ta = clampNumber(points[a].lat, 0);
+      var tb = clampNumber(points[b].lat, 0);
+      if (ta !== tb) return ta - tb;
+      return a - b;
+    });
+    return order;
+  }
+
+  // 正準順で得た行列を、元の要求順へ並べ戻す純粋関数。
+  // order[c] = 要求インデックス(canon[c] = points[order[c]])。返り値 R[i][j] = dur(points[i], points[j])。
+  function permuteMatrix(canonMatrix, order) {
+    var n = order.length;
+    var pos = [];
+    for (var c = 0; c < n; c++) pos[order[c]] = c;
+    var result = [];
+    for (var i = 0; i < n; i++) {
+      var row = [];
+      var canonRow = canonMatrix[pos[i]] || [];
+      for (var j = 0; j < n; j++) {
+        var value = canonRow[pos[j]];
+        row.push(value === undefined ? null : value);
+      }
+      result.push(row);
+    }
+    return result;
+  }
+
   function normalizeLatLng(text) {
     var m = String(text || '').trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
     if (!m) return null;
@@ -481,6 +517,8 @@
     minToTime: minToTime,
     formatClock: formatClock,
     estimateMatrix: estimateMatrix,
+    canonicalOrder: canonicalOrder,
+    permuteMatrix: permuteMatrix,
     scheduleRoute: scheduleRoute,
     optimizeRoute: optimizeRoute,
     normalizeLatLng: normalizeLatLng,

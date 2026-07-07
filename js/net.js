@@ -1,6 +1,7 @@
 'use strict';
 
 (function (global) {
+  var L = global.MeguriLogic;
   var CACHE_KEY_PREFIX = 'meguri.osrm.v1.';
   var CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -71,10 +72,16 @@
   }
 
   function fetchOsrmMatrix(points) {
-    var key = matrixCacheKey(points);
+    // 地点を座標で正準化した順に並べてキー生成・フェッチする(配列順に依存しないキャッシュ)。
+    // 保存する行列も正準順。返す直前に要求順(points の並び)へ並べ戻す。
+    var order = L.canonicalOrder(points);
+    var canon = order.map(function (i) { return points[i]; });
+    var key = matrixCacheKey(canon);
     var cached = readCache(key);
-    if (cached) return Promise.resolve({ matrix: cached, source: 'cache', approximate: false });
-    var coords = points.map(function (p) {
+    if (cached && cached.length === canon.length) {
+      return Promise.resolve({ matrix: L.permuteMatrix(cached, order), source: 'cache', approximate: false });
+    }
+    var coords = canon.map(function (p) {
       return roundCoord(p.lng) + ',' + roundCoord(p.lat);
     }).join(';');
     var url = 'https://router.project-osrm.org/table/v1/driving/' + coords + '?annotations=duration';
@@ -89,7 +96,7 @@
         });
       });
       writeCache(key, matrix);
-      return { matrix: matrix, source: 'osrm', approximate: false };
+      return { matrix: L.permuteMatrix(matrix, order), source: 'osrm', approximate: false };
     });
   }
 

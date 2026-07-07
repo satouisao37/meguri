@@ -78,6 +78,27 @@ assert('日跨ぎ到着に翌が付く', lateNight.stops[0].arrival === '翌 01:
 assert('日跨ぎ出発に翌が付く', lateNight.stops[0].depart === '翌 01:30');
 assert('日跨ぎ帰着に翌が付く', lateNight.finishTime === '翌 01:30');
 
+var cpoints = [
+  { lat: 34, lng: 135.7 },
+  { lat: 35, lng: 135.5 },
+  { lat: 34, lng: 135.6 }
+];
+var cOrder = L.canonicalOrder(cpoints);
+assert('canonicalOrder は経度昇順', JSON.stringify(cOrder) === JSON.stringify([1, 2, 0]));
+var cReversed = [cpoints[2], cpoints[0], cpoints[1]];
+var seq1 = cOrder.map(function (i) { return cpoints[i].lng + ',' + cpoints[i].lat; });
+var seq2 = L.canonicalOrder(cReversed).map(function (i) { return cReversed[i].lng + ',' + cReversed[i].lat; });
+assert('正準列は入力順に非依存', JSON.stringify(seq1) === JSON.stringify(seq2));
+
+var canonM = [
+  [22, 20, 21],
+  [2, 0, 1],
+  [12, 10, 11]
+];
+var permuted = L.permuteMatrix(canonM, [2, 0, 1]);
+assert('permuteMatrix は要求順へ並べ戻す', JSON.stringify(permuted) === JSON.stringify([[0, 1, 2], [10, 11, 12], [20, 21, 22]]));
+assert('permuteMatrix は null を保持', L.permuteMatrix([[0, null], [null, 0]], [1, 0])[0][1] === null);
+
 var optimized = L.optimizeRoute({
   departure: kyoto,
   departTime: '09:00',
