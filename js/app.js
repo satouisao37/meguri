@@ -347,11 +347,22 @@
     var pad = 36;
     var w = 420;
     var h = 220;
+    var availW = w - pad * 2;
+    var availH = h - pad * 2;
+    var midLat = (minLat + maxLat) / 2;
+    var cosLat = Math.cos(midLat * Math.PI / 180);
+    var lngGeoSpan = (maxLng - minLng) * cosLat;
+    var latSpan = maxLat - minLat;
+    var scale = Math.min(availW / (lngGeoSpan || 1e-9), availH / (latSpan || 1e-9));
+    var drawnW = lngGeoSpan * scale;
+    var drawnH = latSpan * scale;
+    var offsetX = pad + (availW - drawnW) / 2;
+    var offsetY = pad + (availH - drawnH) / 2;
     function x(p) {
-      return pad + ((p.lng - minLng) / ((maxLng - minLng) || 1)) * (w - pad * 2);
+      return offsetX + ((p.lng - minLng) * cosLat) * scale;
     }
     function y(p) {
-      return h - pad - ((p.lat - minLat) / ((maxLat - minLat) || 1)) * (h - pad * 2);
+      return h - (offsetY + (p.lat - minLat) * scale);
     }
     var poly = points.map(function (p) { return x(p).toFixed(1) + ',' + y(p).toFixed(1); }).join(' ');
     var dots = points.map(function (p, idx) {
