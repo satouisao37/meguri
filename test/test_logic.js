@@ -60,6 +60,24 @@ assert('遅刻を記録', schedule.stops[1].lateMin === 140);
 assert('帰路を総移動に含める', schedule.totalTravelMin === 65);
 assert('帰着時刻を計算', schedule.finishTime === '12:15');
 
+assert('formatClock 当日は素の時刻', L.formatClock(90) === '01:30');
+assert('formatClock 23:59 境界', L.formatClock(1439) === '23:59');
+assert('formatClock 翌0時', L.formatClock(1440) === '翌 00:00');
+assert('formatClock 翌日は翌付き', L.formatClock(1440 + 90) === '翌 01:30');
+assert('formatClock 2日後は+2日', L.formatClock(2 * 1440 + 90) === '+2日 01:30');
+
+var lateNight = L.scheduleRoute({
+  departure: kyoto,
+  departTime: '23:00',
+  mode: 'car',
+  returnToStart: false,
+  matrix: [[0, 120], [120, 0]],
+  places: [{ id: 'p1', name: '清水寺', lat: 34.9949, lng: 135.7850, desired: null, stayMin: 30, memo: '' }]
+});
+assert('日跨ぎ到着に翌が付く', lateNight.stops[0].arrival === '翌 01:00');
+assert('日跨ぎ出発に翌が付く', lateNight.stops[0].depart === '翌 01:30');
+assert('日跨ぎ帰着に翌が付く', lateNight.finishTime === '翌 01:30');
+
 var optimized = L.optimizeRoute({
   departure: kyoto,
   departTime: '09:00',

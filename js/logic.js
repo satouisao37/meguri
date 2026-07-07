@@ -56,6 +56,17 @@
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
   }
 
+  // 絶対分を表示用時刻にする。日を跨ぐとき(翌日以降)は「翌 HH:MM」「+N日 HH:MM」を付けて
+  // 帰着・到着が翌日であることを明示する(minToTime は 24h で丸めるだけで日情報を落とすため)。
+  function formatClock(total) {
+    var minutes = Math.round(clampNumber(total, 0));
+    var time = minToTime(minutes);
+    var day = Math.floor(minutes / MIN_PER_DAY);
+    if (day <= 0) return time;
+    if (day === 1) return '翌 ' + time;
+    return '+' + day + '日 ' + time;
+  }
+
   function durationFromMatrix(matrix, fromIndex, toIndex, points, mode) {
     if (matrix && matrix[fromIndex] && matrix[fromIndex][toIndex] !== undefined && matrix[fromIndex][toIndex] !== null) {
       return Math.max(0, clampNumber(matrix[fromIndex][toIndex], 0));
@@ -112,9 +123,9 @@
         arrivalMin: Math.round(arrival),
         startMin: Math.round(start),
         departMin: Math.round(depart),
-        arrival: minToTime(arrival),
-        start: minToTime(start),
-        depart: minToTime(depart),
+        arrival: formatClock(arrival),
+        start: formatClock(start),
+        depart: formatClock(depart),
         waitMin: Math.round(wait),
         lateMin: Math.round(late),
         stayMin: stay
@@ -148,7 +159,7 @@
       returnLeg: returnLeg,
       departTime: minToTime(departMin),
       finishMin: Math.round(current),
-      finishTime: minToTime(current),
+      finishTime: formatClock(current),
       totalTravelMin: totalTravelMin,
       totalStayMin: totalStayMin,
       totalWaitMin: totalWaitMin,
@@ -468,6 +479,7 @@
     carFallbackMin: carFallbackMin,
     timeToMin: timeToMin,
     minToTime: minToTime,
+    formatClock: formatClock,
     estimateMatrix: estimateMatrix,
     scheduleRoute: scheduleRoute,
     optimizeRoute: optimizeRoute,
