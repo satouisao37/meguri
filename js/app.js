@@ -388,6 +388,7 @@
       (function (item) {
         var btn = document.createElement('button');
         btn.type = 'button';
+        if (item.full) btn.title = item.full;
         btn.textContent = item.name + ' / ' + item.lat.toFixed(5) + ',' + item.lng.toFixed(5);
         btn.addEventListener('click', function () {
           onPick(item);
