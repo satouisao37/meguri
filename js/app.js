@@ -42,6 +42,11 @@
     $('message').textContent = text || '';
   }
 
+  function setCalcBusy(busy) {
+    $('optimizeBtn').disabled = !!busy;
+    $('scheduleBtn').disabled = !!busy;
+  }
+
   function fmtMin(min) {
     min = Math.round(Number(min) || 0);
     var h = Math.floor(min / 60);
@@ -465,6 +470,7 @@
       return;
     }
     setMessage('計算中です。');
+    setCalcBusy(true);
     buildMatrix().then(function (info) {
       var result = L.optimizeRoute({
         departure: state.departure,
@@ -488,6 +494,8 @@
       render();
     }).catch(function () {
       setMessage('計算に失敗しました。');
+    }).finally(function () {
+      setCalcBusy(false);
     });
   }
 
@@ -517,6 +525,7 @@
       return;
     }
     setMessage('計算中です。');
+    setCalcBusy(true);
     buildMatrix().then(function (info) {
       applySchedule(info);
       save();
@@ -524,6 +533,8 @@
       render();
     }).catch(function () {
       setMessage('計算に失敗しました。');
+    }).finally(function () {
+      setCalcBusy(false);
     });
   }
 
