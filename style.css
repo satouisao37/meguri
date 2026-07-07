@@ -97,6 +97,15 @@ textarea:focus-visible,
   font-weight: 700;
 }
 
+.secondary {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 8px;
+  border-color: var(--line);
+  color: var(--line);
+  font-weight: 700;
+}
+
 .app-header {
   display: flex;
   align-items: end;

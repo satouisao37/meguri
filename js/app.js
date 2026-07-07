@@ -424,6 +424,37 @@
     });
   }
 
+  // 現在の並び順(手動調整済み)を守ったまま時刻だけ再計算する。
+  // optimize と違い state.places を並べ替えず、manualOrder も true のまま維持する。
+  function recalcSchedule() {
+    updateFromInputs();
+    if (!isFinite(state.departure.lat) || !isFinite(state.departure.lng)) {
+      setMessage('出発地の緯度経度を指定してください。');
+      return;
+    }
+    if (!state.places.length) {
+      setMessage('場所を追加してください。');
+      return;
+    }
+    setMessage('計算中です。');
+    buildMatrix().then(function (info) {
+      lastSchedule = L.scheduleRoute({
+        departure: state.departure,
+        departTime: state.departTime,
+        mode: state.mode,
+        returnToStart: state.returnToStart,
+        places: state.places,
+        matrix: info.matrix
+      });
+      matrixInfo = { label: info.label, approximate: info.approximate };
+      save();
+      setMessage('この並び順で計算しました。');
+      render();
+    }).catch(function () {
+      setMessage('計算に失敗しました。');
+    });
+  }
+
   function bind() {
     $('departureSearchBtn').addEventListener('click', function () { searchPlace('departure'); });
     $('placeSearchBtn').addEventListener('click', function () { searchPlace('place'); });
@@ -449,6 +480,7 @@
       });
     });
     $('optimizeBtn').addEventListener('click', optimize);
+    $('scheduleBtn').addEventListener('click', recalcSchedule);
     $('clearBtn').addEventListener('click', function () {
       if (!confirm('保存データを全て消去しますか。')) return;
       localStorage.removeItem(STORAGE_KEY);
