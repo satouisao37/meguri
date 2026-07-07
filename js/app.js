@@ -50,8 +50,14 @@
 
   function updateFromInputs() {
     state.departure.name = $('departureName').value.trim() || '出発地';
-    state.departure.lat = Number($('departureLat').value);
-    state.departure.lng = Number($('departureLng').value);
+    // 空欄・非数のときは Number('')=0 を代入せず直前の座標を保持する(場所側の編集ハンドラと同じ検証)。
+    // 保持後に render()→syncInputs() でフィールドは元の値に戻る。
+    var latRaw = $('departureLat').value;
+    var lngRaw = $('departureLng').value;
+    var lat = Number(latRaw);
+    var lng = Number(lngRaw);
+    if (latRaw.trim() && isFinite(lat)) state.departure.lat = lat;
+    if (lngRaw.trim() && isFinite(lng)) state.departure.lng = lng;
     state.departTime = $('departTime').value || '09:00';
     state.returnToStart = $('returnToStart').checked;
   }
