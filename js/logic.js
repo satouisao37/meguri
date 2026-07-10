@@ -452,6 +452,23 @@
     return chosen;
   }
 
+  // 出発地を中心に ±halfDeg の矩形を Nominatim の viewbox 文字列にする(soft bias 用。bounded は付けない)。
+  // 形式は "<x1>,<y1>,<x2>,<y2>"(x=経度・y=緯度、左上→右下の対角2点)。緯度は[-90,90]・経度は[-180,180]でクランプ。
+  // 不正座標や halfDeg<=0 は '' を返し、呼び出し側でバイアスを付けない判断ができる。
+  function nominatimViewbox(lat, lng, halfDeg) {
+    var la = Number(lat);
+    var ln = Number(lng);
+    if (!isFinite(la) || !isFinite(ln)) return '';
+    var h = Number(halfDeg);
+    if (!isFinite(h) || h <= 0) h = 0.75;
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    var west = clamp(ln - h, -180, 180);
+    var east = clamp(ln + h, -180, 180);
+    var north = clamp(la + h, -90, 90);
+    var south = clamp(la - h, -90, 90);
+    return [west, north, east, south].map(function (v) { return v.toFixed(5); }).join(',');
+  }
+
   function isDesiredTime(value) {
     return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   }
@@ -619,6 +636,7 @@
     optimizeRoute: optimizeRoute,
     normalizeLatLng: normalizeLatLng,
     shortenDisplayName: shortenDisplayName,
+    nominatimViewbox: nominatimViewbox,
     normalizePlan: normalizePlan,
     normalizePlanStore: normalizePlanStore,
     buildRouteUrl: buildRouteUrl

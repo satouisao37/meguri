@@ -45,6 +45,20 @@ var shortenedOne = L.shortenDisplayName('とても長い名前の観光施設と
 assert('1セグメント超長は省略記号付き24字', shortenedOne.length === 24 && shortenedOne.slice(-1) === '…');
 assert('空 display_name は空文字', L.shortenDisplayName('  ') === '' && L.shortenDisplayName(null) === '');
 
+// nominatimViewbox: 出発地中心の soft bias 矩形(<x1>,<y1>,<x2>,<y2> = 経度,緯度,経度,緯度 の左上→右下)
+var vb = L.nominatimViewbox(34.9858, 135.7588, 0.75);
+var vbParts = vb.split(',');
+assert('viewbox は4値', vbParts.length === 4);
+assert('viewbox 左上経度 = 中心-半辺', vbParts[0] === (135.7588 - 0.75).toFixed(5));
+assert('viewbox 左上緯度 = 中心+半辺', vbParts[1] === (34.9858 + 0.75).toFixed(5));
+assert('viewbox 右下経度 = 中心+半辺', vbParts[2] === (135.7588 + 0.75).toFixed(5));
+assert('viewbox 右下緯度 = 中心-半辺', vbParts[3] === (34.9858 - 0.75).toFixed(5));
+assert('不正座標の viewbox は空文字', L.nominatimViewbox(NaN, 135, 0.75) === '' && L.nominatimViewbox(35, 'x', 0.75) === '');
+assert('halfDeg<=0 は既定0.75にフォールバック', L.nominatimViewbox(35, 135, 0).split(',')[2] === (135 + 0.75).toFixed(5));
+var vbClamp = L.nominatimViewbox(89.8, 179.9, 0.75).split(',');
+assert('緯度は90でクランプ', vbClamp[1] === '90.00000');
+assert('経度は180でクランプ', vbClamp[2] === '180.00000');
+
 var matrix = [
   [0, 20, 10, 60],
   [20, 0, 35, 50],

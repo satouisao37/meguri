@@ -53,8 +53,16 @@
     for (var r = 0; r < remove.length; r++) localStorage.removeItem(remove[r]);
   }
 
-  function searchNominatim(query) {
-    var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ja&countrycodes=jp&q=' + encodeURIComponent(query);
+  var VIEWBOX_HALF_DEG = 0.75;   // 出発地中心の soft bias 矩形の半辺(度)。約 ±80km 相当
+
+  // near = {lat,lng} を渡すとその近傍を優先する viewbox を soft bias として付ける(bounded は付けない=全国結果は残す)。
+  function searchNominatim(query, near) {
+    var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ja&countrycodes=jp';
+    if (near) {
+      var box = L.nominatimViewbox(near.lat, near.lng, VIEWBOX_HALF_DEG);
+      if (box) url += '&viewbox=' + box;
+    }
+    url += '&q=' + encodeURIComponent(query);
     return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (response) {
       if (!response.ok) throw new Error('地名検索に失敗しました');
       return response.json();

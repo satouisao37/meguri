@@ -554,7 +554,11 @@
     }
     if (!query) return;
     setMessage('検索中です。');
-    Net.searchNominatim(query).then(function (items) {
+    // 場所検索は出発地近傍を優先(soft bias)。出発地検索は別地域へ自由に切り替えられるよう無バイアス。
+    var near = (kind === 'place' && isFinite(state.departure.lat) && isFinite(state.departure.lng))
+      ? { lat: state.departure.lat, lng: state.departure.lng }
+      : null;
+    Net.searchNominatim(query, near).then(function (items) {
       setMessage('');
       renderResults(kind === 'departure' ? 'departureResults' : 'placeResults', items, function (item) {
         if (kind === 'departure') {
