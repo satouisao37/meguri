@@ -59,6 +59,14 @@ var vbClamp = L.nominatimViewbox(89.8, 179.9, 0.75).split(',');
 assert('緯度は90でクランプ', vbClamp[1] === '90.00000');
 assert('経度は180でクランプ', vbClamp[2] === '180.00000');
 
+// errorText: catch のエラー詳細を日本語で整形(message 優先 / ネットワーク失敗を平易化 / 空は既定文言)
+assert('errorText は message を優先', L.errorText(new Error('OSRM の取得に失敗しました')) === 'OSRM の取得に失敗しました');
+assert('errorText は Error でない throw 値を String 化', L.errorText('生の文字列エラー') === '生の文字列エラー');
+assert('errorText は Failed to fetch を平易化', L.errorText(new TypeError('Failed to fetch')).indexOf('ネットワーク') === 0);
+assert('errorText は Load failed を平易化', L.errorText(new TypeError('Load failed')).indexOf('ネットワーク') === 0);
+assert('errorText は null を不明なエラーに', L.errorText(null) === '不明なエラー');
+assert('errorText は空 message の Error を不明なエラーに', L.errorText(new Error('')) === '不明なエラー');
+
 var matrix = [
   [0, 20, 10, 60],
   [20, 0, 35, 50],

@@ -469,6 +469,21 @@
     return [west, north, east, south].map(function (v) { return v.toFixed(5); }).join(',');
   }
 
+  // エラーをユーザー向けの日本語詳細文字列にする。Error.message を優先(空 message の Error は「不明なエラー」)、
+  // Error でない throw 値は String(err)。ブラウザ差のある fetch のネットワーク失敗
+  // (Failed to fetch / Load failed / NetworkError 等)は平易な日本語へ置換する。
+  function errorText(err) {
+    var msg = '';
+    if (err && typeof err.message === 'string') msg = err.message;
+    else if (err !== null && err !== undefined) msg = String(err);
+    msg = (msg || '').trim();
+    if (!msg) return '不明なエラー';
+    if (/failed to fetch|load failed|networkerror|network request failed|fetch failed/i.test(msg)) {
+      return 'ネットワークに接続できませんでした(オフラインの可能性)';
+    }
+    return msg;
+  }
+
   function isDesiredTime(value) {
     return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   }
@@ -637,6 +652,7 @@
     normalizeLatLng: normalizeLatLng,
     shortenDisplayName: shortenDisplayName,
     nominatimViewbox: nominatimViewbox,
+    errorText: errorText,
     normalizePlan: normalizePlan,
     normalizePlanStore: normalizePlanStore,
     buildRouteUrl: buildRouteUrl

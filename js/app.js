@@ -570,7 +570,7 @@
         }
       });
     }).catch(function (err) {
-      setMessage(err.message || '検索に失敗しました。');
+      setMessage(L.errorText(err));
     });
   }
 
@@ -637,7 +637,7 @@
       setMessage('計算しました。');
       render();
     }).catch(function (err) {
-      setMessage('計算に失敗しました: ' + (err && err.message ? err.message : String(err)));
+      setMessage('計算に失敗しました: ' + L.errorText(err));
     }).finally(function () {
       setCalcBusy(false);
     });
@@ -677,7 +677,7 @@
       setMessage('この並び順で計算しました。');
       render();
     }).catch(function (err) {
-      setMessage('計算に失敗しました: ' + (err && err.message ? err.message : String(err)));
+      setMessage('計算に失敗しました: ' + L.errorText(err));
     }).finally(function () {
       setCalcBusy(false);
     });
