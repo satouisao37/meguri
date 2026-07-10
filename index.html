@@ -22,6 +22,20 @@
   </header>
 
   <main class="layout">
+    <section class="panel plan-panel" aria-labelledby="planPanelTitle">
+      <div class="section-head">
+        <h2 id="planPanelTitle">プラン</h2>
+        <span class="status">日別に保存</span>
+      </div>
+      <div class="plan-row">
+        <select id="planSelect" aria-label="プランを選択"></select>
+        <button type="button" id="planNewBtn">新規</button>
+        <button type="button" id="planDupBtn">複製</button>
+        <button type="button" id="planDeleteBtn">削除</button>
+      </div>
+      <label>プラン名<input id="planTitle" type="text" placeholder="プラン名"></label>
+    </section>
+
     <section class="panel setup-panel" aria-labelledby="setupTitle">
       <div class="section-head">
         <h2 id="setupTitle">出発設定</h2>
@@ -94,7 +108,7 @@
   </main>
 
   <footer>
-    <span>v1.6.0</span>
+    <span>v1.7.0</span>
     <span>地名検索 © OpenStreetMap contributors</span>
     <span>公共交通は距離ベースの目安です。</span>
   </footer>

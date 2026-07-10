@@ -1,7 +1,8 @@
 'use strict';
 
 (function () {
-  var STORAGE_KEY = 'meguri.plan.v1';
+  var LEGACY_KEY = 'meguri.plan.v1';
+  var STORE_KEY = 'meguri.plans.v2';
   var L = globalThis.MeguriLogic;
   var Net = globalThis.MeguriNet;
   var DEFAULT_PLAN = {
@@ -13,7 +14,8 @@
     manualOrder: false,
     updatedAt: new Date().toISOString()
   };
-  var state = L.normalizePlan(DEFAULT_PLAN, DEFAULT_PLAN);
+  var store = null;              // { version, activeId, plans[] }
+  var state = null;              // アクティブプラン(store.plans 内の当該オブジェクトと同一参照)
   var lastSchedule = null;
   var matrixInfo = { label: '未計算', approximate: false };
   var lastDeletedPlace = null;
@@ -23,19 +25,120 @@
     return document.getElementById(id);
   }
 
+  function persistStore() {
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    var el = $('saveState');
+    if (el) el.textContent = '保存済み';
+  }
+
   function save() {
     state.updatedAt = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    $('saveState').textContent = '保存済み';
+    persistStore();
   }
 
   function load() {
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) state = L.normalizePlan(JSON.parse(raw), DEFAULT_PLAN);
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        store = L.normalizePlanStore(JSON.parse(raw), DEFAULT_PLAN);
+      } else {
+        var legacy = localStorage.getItem(LEGACY_KEY);
+        if (legacy) {
+          // 旧 v1 単一プランを包んで v2 へ移行。旧キーは消さず残す(バックアップ)。
+          store = L.normalizePlanStore(JSON.parse(legacy), DEFAULT_PLAN);
+          persistStore();
+        } else {
+          store = L.normalizePlanStore({ plans: [] }, DEFAULT_PLAN);
+        }
+      }
     } catch (e) {
-      state = L.normalizePlan(DEFAULT_PLAN, DEFAULT_PLAN);
+      store = L.normalizePlanStore({ plans: [] }, DEFAULT_PLAN);
     }
+    state = activePlan();
+  }
+
+  function activePlan() {
+    for (var i = 0; i < store.plans.length; i++) {
+      if (store.plans[i].id === store.activeId) return store.plans[i];
+    }
+    return store.plans[0];
+  }
+
+  function makePlanId() {
+    return 'pl' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function todayTitle() {
+    var d = new Date();
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function freshPlan(title) {
+    var base = L.normalizePlan(DEFAULT_PLAN, DEFAULT_PLAN);
+    base.id = makePlanId();
+    base.title = title || todayTitle();
+    return base;
+  }
+
+  // アクティブプランを切り替える。一時状態(スケジュール・削除取消トースト)はリセットし再計算する。
+  function switchPlan(id) {
+    store.activeId = id;
+    state = activePlan();
+    lastSchedule = null;
+    lastDeletedPlace = null;
+    hideToast();
+    persistStore();
+    autoSchedule();
+    render();
+  }
+
+  function newPlan() {
+    var plan = freshPlan();
+    store.plans.push(plan);
+    switchPlan(plan.id);
+  }
+
+  function duplicatePlan() {
+    var copy = JSON.parse(JSON.stringify(state));
+    copy.id = makePlanId();
+    copy.title = (state.title || 'プラン') + '(複製)';
+    for (var i = 0; i < copy.places.length; i++) {
+      copy.places[i].id = 'p' + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5);
+    }
+    store.plans.push(copy);
+    switchPlan(copy.id);
+  }
+
+  function deleteActivePlan() {
+    if (store.plans.length <= 1) {
+      setMessage('最後のプランは削除できません。');
+      return;
+    }
+    if (!confirm('このプランを削除しますか。')) return;
+    var idx = 0;
+    for (var i = 0; i < store.plans.length; i++) {
+      if (store.plans[i].id === store.activeId) { idx = i; break; }
+    }
+    store.plans.splice(idx, 1);
+    switchPlan(store.plans[Math.min(idx, store.plans.length - 1)].id);
+  }
+
+  function renderPlanBar() {
+    var select = $('planSelect');
+    if (!select) return;
+    select.innerHTML = '';
+    for (var i = 0; i < store.plans.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = store.plans[i].id;
+      opt.textContent = store.plans[i].title;
+      if (store.plans[i].id === store.activeId) opt.selected = true;
+      select.appendChild(opt);
+    }
+    var title = $('planTitle');
+    if (title) title.value = state.title || '';
+    var delBtn = $('planDeleteBtn');
+    if (delBtn) delBtn.disabled = store.plans.length <= 1;
   }
 
   function setMessage(text) {
@@ -384,6 +487,7 @@
 
   function render() {
     document.body.classList.toggle('mode-transit', state.mode === 'transit');
+    renderPlanBar();
     syncInputs();
     renderSummary();
     renderRouteActions();
@@ -562,6 +666,15 @@
   }
 
   function bind() {
+    $('planSelect').addEventListener('change', function () { switchPlan(this.value); });
+    $('planNewBtn').addEventListener('click', newPlan);
+    $('planDupBtn').addEventListener('click', duplicatePlan);
+    $('planDeleteBtn').addEventListener('click', deleteActivePlan);
+    $('planTitle').addEventListener('change', function () {
+      state.title = this.value.trim() || todayTitle();
+      renderPlanBar();
+      save();
+    });
     $('departureSearchBtn').addEventListener('click', function () { searchPlace('departure'); });
     $('placeSearchBtn').addEventListener('click', function () { searchPlace('place'); });
     $('addCoordBtn').addEventListener('click', function () {
@@ -588,19 +701,25 @@
     $('optimizeBtn').addEventListener('click', optimize);
     $('scheduleBtn').addEventListener('click', recalcSchedule);
     $('clearBtn').addEventListener('click', function () {
-      if (!confirm('保存データを全て消去しますか。')) return;
-      localStorage.removeItem(STORAGE_KEY);
-      state.places = [];
+      // 全消去はアクティブプランの内容のみリセット(id/title と他プラン・バックアップは残す)。
+      if (!confirm('このプランの内容を消去しますか。')) return;
+      var fresh = L.normalizePlan(DEFAULT_PLAN, DEFAULT_PLAN);
+      state.departure = fresh.departure;
+      state.departTime = fresh.departTime;
+      state.mode = fresh.mode;
+      state.returnToStart = fresh.returnToStart;
+      state.places = fresh.places;
+      state.manualOrder = fresh.manualOrder;
       lastSchedule = null;
       save();
       render();
     });
     $('exportBtn').addEventListener('click', function () {
       updateFromInputs();
-      var blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      var blob = new Blob([JSON.stringify(store, null, 2)], { type: 'application/json' });
       var a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'meguri-plan.json';
+      a.download = 'meguri-plans.json';
       a.click();
       URL.revokeObjectURL(a.href);
     });
@@ -611,9 +730,23 @@
       reader.onload = function () {
         try {
           var next = JSON.parse(String(reader.result));
-          state = L.normalizePlan(next, DEFAULT_PLAN);
+          if (next && next.plans instanceof Array) {
+            // 容器形状 → store を丸ごと置換(バックアップ復元)
+            store = L.normalizePlanStore(next, DEFAULT_PLAN);
+          } else {
+            // 単一プラン形状 → 現在の store に新規プランとして追加し切替(既存を失わない)
+            var one = L.normalizePlan(next, DEFAULT_PLAN);
+            one.id = makePlanId();
+            one.title = todayTitle();
+            store.plans.push(one);
+            store.activeId = one.id;
+          }
+          state = activePlan();
           lastSchedule = null;
+          lastDeletedPlace = null;
+          hideToast();
           save();
+          autoSchedule();
           render();
         } catch (e) {
           setMessage('JSON を読み込めませんでした。');
