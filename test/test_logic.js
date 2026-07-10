@@ -266,6 +266,34 @@ assert('旧 desired プランの移行前後でスコアが一致する', legacy
 var filled = L.normalizePlan({ places: [] }, { departure: kyoto, departTime: '08:00', mode: 'transit', places: [kiyomizu] });
 assert('normalizePlan は top-level 欠損キーを補完', filled.departTime === '08:00' && filled.mode === 'transit' && filled.departure.name === '京都駅');
 
+var storeDefaults = { departure: kyoto, departTime: '09:00', mode: 'car', places: [] };
+
+var planStore = L.normalizePlanStore({
+  activeId: 'b',
+  plans: [
+    { id: 'a', title: '1日目', departure: kyoto, departTime: '09:00', mode: 'car', places: [kiyomizu] },
+    { id: 'b', title: '2日目', departure: kyoto, departTime: '10:00', mode: 'transit', places: [nijo] }
+  ]
+}, storeDefaults);
+assert('容器は version 2', planStore.version === 2);
+assert('容器は plans を正規化', planStore.plans.length === 2 && planStore.plans[0].places[0].id === 'p1');
+assert('容器は activeId を保持', planStore.activeId === 'b');
+assert('容器は title を保持', planStore.plans[1].title === '2日目');
+
+var badActive = L.normalizePlanStore({ activeId: 'zzz', plans: [{ id: 'a', title: 'x', departure: kyoto, places: [] }] }, storeDefaults);
+assert('不正 activeId は先頭にフォールバック', badActive.activeId === 'a');
+
+var emptyStore = L.normalizePlanStore({ plans: [] }, storeDefaults);
+assert('空 plans は1件補完', emptyStore.plans.length === 1 && emptyStore.activeId === emptyStore.plans[0].id);
+assert('補完プランは決定的 id/title', emptyStore.plans[0].id === 'pl0' && emptyStore.plans[0].title === 'プラン1');
+
+var legacyV1 = { departure: kyoto, departTime: '08:30', mode: 'transit', returnToStart: true, manualOrder: true, places: [{ id: 'x1', name: 'A', lat: 35, lng: 135, open: '09:00', close: '17:00', stayMin: 40, memo: 'm' }] };
+var migratedStore = L.normalizePlanStore(legacyV1, storeDefaults);
+assert('旧 v1 単一プランを1プランに包む', migratedStore.version === 2 && migratedStore.plans.length === 1);
+assert('移行後 activeId は包んだプラン', migratedStore.activeId === migratedStore.plans[0].id);
+var mp = migratedStore.plans[0];
+assert('移行でプラン全フィールドを保持', mp.departTime === '08:30' && mp.mode === 'transit' && mp.returnToStart === true && mp.places[0].open === '09:00' && mp.places[0].close === '17:00' && mp.places[0].stayMin === 40);
+
 if (failures) {
   console.log('失敗: ' + failures);
   $.exit(1);

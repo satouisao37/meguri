@@ -556,6 +556,52 @@
     };
   }
 
+  // 単一プランに id / title を付与して容器内プランへ正規化する純粋関数。
+  // 既存 normalizePlan を1プラン正規化として流用し、id/title を決定的に補完する。
+  function normalizeStoredPlan(raw, index, defaults) {
+    var source = raw || {};
+    var base = normalizePlan(source, defaults);
+    var id = stringValue(source.id, 'pl' + index);
+    if (!id) id = 'pl' + index;
+    var title = stringValue(source.title, '');
+    if (!title) title = 'プラン' + (index + 1);
+    return {
+      id: id,
+      title: title,
+      departure: base.departure,
+      departTime: base.departTime,
+      mode: base.mode,
+      returnToStart: base.returnToStart,
+      places: base.places,
+      manualOrder: base.manualOrder,
+      updatedAt: base.updatedAt
+    };
+  }
+
+  // 複数プラン容器 { version, activeId, plans[] } を正規化する純粋関数。
+  // 容器形状は各プランを正規化(≥1件保証・activeId 整合)。単一プラン形状(旧 v1 等)は
+  // 1プランに包んで返す(= meguri.plan.v1 → meguri.plans.v2 のマイグレーション)。
+  // Date/乱数は使わない(決定的。id/title の生成は呼び出し側 app.js の責務)。
+  function normalizePlanStore(raw, defaults) {
+    var source = raw || {};
+    if (source.plans instanceof Array) {
+      var plans = [];
+      for (var i = 0; i < source.plans.length; i++) {
+        plans.push(normalizeStoredPlan(source.plans[i], i, defaults));
+      }
+      if (!plans.length) plans.push(normalizeStoredPlan(defaults, 0, defaults));
+      var wanted = stringValue(source.activeId, '');
+      var activeId = null;
+      for (var j = 0; j < plans.length; j++) {
+        if (plans[j].id === wanted) { activeId = wanted; break; }
+      }
+      if (activeId === null) activeId = plans[0].id;
+      return { version: 2, activeId: activeId, plans: plans };
+    }
+    var one = normalizeStoredPlan(source, 0, defaults);
+    return { version: 2, activeId: one.id, plans: [one] };
+  }
+
   global.MeguriLogic = {
     MAX_OPTIMIZE_PLACES: MAX_OPTIMIZE_PLACES,
     MAX_WAYPOINTS: MAX_WAYPOINTS,
@@ -574,6 +620,7 @@
     normalizeLatLng: normalizeLatLng,
     shortenDisplayName: shortenDisplayName,
     normalizePlan: normalizePlan,
+    normalizePlanStore: normalizePlanStore,
     buildRouteUrl: buildRouteUrl
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
