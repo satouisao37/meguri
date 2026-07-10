@@ -18,6 +18,7 @@
   var state = null;              // アクティブプラン(store.plans 内の当該オブジェクトと同一参照)
   var lastSchedule = null;
   var matrixInfo = { label: '未計算', approximate: false };
+  var calcBusy = false;          // 計算中フラグ(DOM の disabled に依存しない二重起動ガード)
   var lastDeletedPlace = null;
   var toastTimer = null;
 
@@ -145,9 +146,28 @@
     $('message').textContent = text || '';
   }
 
-  function setCalcBusy(busy) {
-    $('optimizeBtn').disabled = !!busy;
-    $('scheduleBtn').disabled = !!busy;
+  // 押したボタンだけ「計算中…」ラベル + aria-busy にし、両ボタンを disabled にする。
+  // 元ラベルは初回に data-label へ退避しておき、finally での復帰時に確実に戻す。
+  function applyBusyLabel(btn, busy) {
+    if (!btn) return;
+    if (busy) {
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+      btn.textContent = '計算中…';
+      btn.setAttribute('aria-busy', 'true');
+    } else {
+      if (btn.dataset.label) btn.textContent = btn.dataset.label;
+      btn.removeAttribute('aria-busy');
+    }
+  }
+
+  function setCalcBusy(busy, activeId) {
+    calcBusy = !!busy;
+    var opt = $('optimizeBtn');
+    var sch = $('scheduleBtn');
+    opt.disabled = calcBusy;
+    sch.disabled = calcBusy;
+    applyBusyLabel(opt, calcBusy && activeId === 'optimizeBtn');
+    applyBusyLabel(sch, calcBusy && activeId === 'scheduleBtn');
   }
 
   function fmtMin(min) {
@@ -575,6 +595,7 @@
   }
 
   function optimize() {
+    if (calcBusy) return;   // 計算中の二重起動を防ぐ(DOM disabled とは独立の堅牢化)
     updateFromInputs();
     if (!isFinite(state.departure.lat) || !isFinite(state.departure.lng)) {
       setMessage('出発地の緯度経度を指定してください。');
@@ -589,7 +610,7 @@
       return;
     }
     setMessage('計算中です。');
-    setCalcBusy(true);
+    setCalcBusy(true, 'optimizeBtn');
     buildMatrix().then(function (info) {
       var result = L.optimizeRoute({
         departure: state.departure,
@@ -634,6 +655,7 @@
   // 現在の並び順(手動調整済み)を守ったまま時刻だけ再計算する。
   // optimize と違い state.places を並べ替えず、manualOrder も true のまま維持する。
   function recalcSchedule() {
+    if (calcBusy) return;   // 計算中の二重起動を防ぐ(DOM disabled とは独立の堅牢化)
     updateFromInputs();
     if (!isFinite(state.departure.lat) || !isFinite(state.departure.lng)) {
       setMessage('出発地の緯度経度を指定してください。');
@@ -644,7 +666,7 @@
       return;
     }
     setMessage('計算中です。');
-    setCalcBusy(true);
+    setCalcBusy(true, 'scheduleBtn');
     buildMatrix().then(function (info) {
       applySchedule(info);
       save();
