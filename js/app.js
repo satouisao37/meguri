@@ -192,6 +192,67 @@
     state.returnToStart = $('returnToStart').checked;
   }
 
+  function b64urlEncode(str) {
+    var bytes = new TextEncoder().encode(str);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function b64urlDecode(s) {
+    var b64 = String(s).replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  function buildShareUrl(plan) {
+    return location.origin + location.pathname + '#p=' + b64urlEncode(L.encodeSharePlan(plan));
+  }
+
+  function copyShareLink() {
+    updateFromInputs();
+    var url = buildShareUrl(state);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(function () {
+        setMessage('共有リンクをコピーしました。');
+      }).catch(function () {
+        window.prompt('共有リンク(コピーしてください)', url);
+      });
+    } else {
+      window.prompt('共有リンク(コピーしてください)', url);
+    }
+  }
+
+  function readSharedPlanFromHash() {
+    var m = (location.hash || '').match(/^#p=(.+)$/);
+    if (!m) return null;
+    try {
+      return L.decodeSharePlan(b64urlDecode(m[1]), DEFAULT_PLAN);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function maybeImportSharedPlan() {
+    var plan = readSharedPlanFromHash();
+    if (!plan) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    if (!confirm('共有されたプランを読み込みますか?')) return;
+    plan.id = makePlanId();
+    plan.title = (plan.title || todayTitle()) + '(共有)';
+    store.plans.push(plan);
+    store.activeId = plan.id;
+    state = activePlan();
+    lastSchedule = null;
+    deletedStack = [];
+    hideToast();
+    persistStore();
+    setMessage('共有されたプランを読み込みました。');
+  }
+
   function syncInputs() {
     $('departureName').value = state.departure.name || '';
     $('departureLat').value = state.departure.lat;
@@ -674,6 +735,7 @@
     $('planNewBtn').addEventListener('click', newPlan);
     $('planDupBtn').addEventListener('click', duplicatePlan);
     $('planDeleteBtn').addEventListener('click', deleteActivePlan);
+    $('planShareBtn').addEventListener('click', copyShareLink);
     $('planTitle').addEventListener('change', function () {
       state.title = this.value.trim() || todayTitle();
       renderPlanBar();
@@ -815,6 +877,7 @@
   load();
   document.addEventListener('DOMContentLoaded', function () {
     bind();
+    maybeImportSharedPlan();
     autoSchedule();
     render();
     if ('serviceWorker' in navigator) {

@@ -347,6 +347,35 @@ assert('移行後 activeId は包んだプラン', migratedStore.activeId === mi
 var mp = migratedStore.plans[0];
 assert('移行でプラン全フィールドを保持', mp.departTime === '08:30' && mp.mode === 'transit' && mp.returnToStart === true && mp.places[0].open === '09:00' && mp.places[0].close === '17:00' && mp.places[0].stayMin === 40);
 
+var shareSource = L.normalizeStoredPlan({
+  title: '共有テスト',
+  departure: { name: '京都駅', lat: 34.98581234, lng: 135.75881234 },
+  departTime: '08:30',
+  mode: 'car',
+  returnToStart: true,
+  places: [
+    { name: '清水寺', lat: 34.99491234, lng: 135.78501234, stayMin: 65, open: '09:00', close: '17:00', memo: '混雑前に到着' },
+    { name: '二条城', lat: 35.01421234, lng: 135.74801234, stayMin: 30, open: null, close: null, memo: '' }
+  ]
+}, 0, storeDefaults);
+var shared = L.decodeSharePlan(L.encodeSharePlan(shareSource), storeDefaults);
+assert('共有往復はタイトルと出発時刻を保持', shared.title === shareSource.title && shared.departTime === shareSource.departTime);
+assert('共有往復は移動設定を保持', shared.mode === 'car' && shared.returnToStart === true);
+assert('共有往復は出発地を保持', shared.departure.name === shareSource.departure.name);
+near('共有往復は出発緯度を5桁に丸める', shared.departure.lat, 34.98581, 1e-9);
+near('共有往復は出発経度を5桁に丸める', shared.departure.lng, 135.75881, 1e-9);
+assert('共有往復は場所数を保持', shared.places.length === 2);
+assert('共有往復は場所の詳細を保持', shared.places[0].name === '清水寺' && shared.places[0].stayMin === 65 && shared.places[0].open === '09:00' && shared.places[0].close === '17:00' && shared.places[0].memo === '混雑前に到着');
+assert('共有の可変長タプルは空の時間帯とメモを復元', shared.places[1].open === null && shared.places[1].close === null && shared.places[1].memo === '');
+
+var transitShare = L.decodeSharePlan(L.encodeSharePlan({
+  departure: kyoto, departTime: '09:00', mode: 'transit', places: []
+}), storeDefaults);
+assert('共有往復は公共交通モードを保持', transitShare.mode === 'transit');
+assert('共有デコードは不正 JSON を拒否', L.decodeSharePlan('not json', storeDefaults) === null);
+assert('共有デコードはバージョン印のない JSON を拒否', L.decodeSharePlan('{"x":1}', storeDefaults) === null);
+assert('共有デコードは配列 JSON を拒否', L.decodeSharePlan('[]', storeDefaults) === null);
+
 if (failures) {
   console.log('失敗: ' + failures);
   $.exit(1);
