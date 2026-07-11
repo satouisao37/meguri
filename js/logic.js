@@ -662,6 +662,66 @@
     };
   }
 
+  function round5(value) {
+    return Math.round(Number(value) * 1e5) / 1e5;
+  }
+
+  // 共有用に、プランの表示・経路作成に必要な情報だけを小さな JSON へ詰める。
+  function encodeSharePlan(plan) {
+    var source = plan || {};
+    var departure = source.departure || {};
+    var places = source.places instanceof Array ? source.places : [];
+    var compactPlaces = [];
+    for (var i = 0; i < places.length; i++) {
+      var place = places[i] || {};
+      var tuple = [
+        place.name || '',
+        round5(place.lat),
+        round5(place.lng),
+        Math.round(place.stayMin)
+      ];
+      tuple.push(place.open || '', place.close || '', place.memo || '');
+      while (tuple.length > 4 && tuple[tuple.length - 1] === '') tuple.pop();
+      compactPlaces.push(tuple);
+    }
+    return JSON.stringify({
+      v: 1,
+      t: typeof source.title === 'string' ? source.title : '',
+      d: { n: departure.name, a: round5(departure.lat), o: round5(departure.lng) },
+      dt: source.departTime,
+      m: source.mode === 'transit' ? 't' : 'c',
+      r: source.returnToStart ? 1 : 0,
+      p: compactPlaces
+    });
+  }
+
+  // 共有用の compact JSON を通常の保存プラン形式へ戻し、既存の検証規則を適用する。
+  function decodeSharePlan(jsonStr, defaults) {
+    var obj;
+    try {
+      obj = JSON.parse(jsonStr);
+    } catch (e) {
+      return null;
+    }
+    if (!obj || typeof obj !== 'object' || obj instanceof Array || obj.v === undefined) return null;
+    var tuples = obj.p instanceof Array ? obj.p : [];
+    var raw = {
+      title: typeof obj.t === 'string' ? obj.t : '',
+      departure: { name: obj.d && obj.d.n, lat: obj.d && obj.d.a, lng: obj.d && obj.d.o },
+      departTime: obj.dt,
+      mode: obj.m === 't' ? 'transit' : 'car',
+      returnToStart: !!obj.r,
+      places: tuples.map(function (source) {
+        var tuple = source instanceof Array ? source : [];
+        return {
+          name: tuple[0], lat: tuple[1], lng: tuple[2], stayMin: tuple[3],
+          open: tuple[4] || null, close: tuple[5] || null, memo: tuple[6] || ''
+        };
+      })
+    };
+    return normalizeStoredPlan(raw, 0, defaults);
+  }
+
   // 複数プラン容器 { version, activeId, plans[] } を正規化する純粋関数。
   // 容器形状は各プランを正規化(≥1件保証・activeId 整合)。単一プラン形状(旧 v1 等)は
   // 1プランに包んで返す(= meguri.plan.v1 → meguri.plans.v2 のマイグレーション)。
@@ -708,7 +768,10 @@
     projectGeoPoints: projectGeoPoints,
     undoToastText: undoToastText,
     normalizePlan: normalizePlan,
+    normalizeStoredPlan: normalizeStoredPlan,
     normalizePlanStore: normalizePlanStore,
+    encodeSharePlan: encodeSharePlan,
+    decodeSharePlan: decodeSharePlan,
     buildRouteUrl: buildRouteUrl
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
