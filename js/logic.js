@@ -484,6 +484,47 @@
     return msg;
   }
 
+  // 緯度経度の点群を w×h(周囲 pad)のキャンバスへ射影する純粋関数。
+  // cos(中緯度)で経度方向を縮めてアスペクト比を保ち、縦横で同一 scale を使い、
+  // 余った側をレターボックス中央寄せする。返す座標は SVG 座標系(y は下向き=北ほど小さい)。
+  // 2点未満・不正座標のときは null(呼び出し側で「表示しない」判断ができる)。
+  function projectGeoPoints(points, opts) {
+    if (!points || points.length < 2) return null;
+    opts = opts || {};
+    var width = isFinite(opts.width) ? opts.width : 420;
+    var height = isFinite(opts.height) ? opts.height : 220;
+    var pad = isFinite(opts.pad) ? opts.pad : 36;
+    var minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (var i = 0; i < points.length; i++) {
+      var la = Number(points[i].lat);
+      var ln = Number(points[i].lng);
+      if (!isFinite(la) || !isFinite(ln)) return null;
+      if (la < minLat) minLat = la;
+      if (la > maxLat) maxLat = la;
+      if (ln < minLng) minLng = ln;
+      if (ln > maxLng) maxLng = ln;
+    }
+    var availW = width - pad * 2;
+    var availH = height - pad * 2;
+    var midLat = (minLat + maxLat) / 2;
+    var cosLat = Math.cos(midLat * Math.PI / 180);
+    var lngGeoSpan = (maxLng - minLng) * cosLat;
+    var latSpan = maxLat - minLat;
+    // 縦横で同じ scale を採る(小さい方=はみ出さない側に合わせる)ことでアスペクト比を保つ。
+    var scale = Math.min(availW / (lngGeoSpan || 1e-9), availH / (latSpan || 1e-9));
+    var drawnW = lngGeoSpan * scale;
+    var drawnH = latSpan * scale;
+    var offsetX = pad + (availW - drawnW) / 2;   // 余白を左右(または上下)へ均等配分=中央寄せ
+    var offsetY = pad + (availH - drawnH) / 2;
+    var coords = [];
+    for (var j = 0; j < points.length; j++) {
+      var x = offsetX + (Number(points[j].lng) - minLng) * cosLat * scale;
+      var y = height - (offsetY + (Number(points[j].lat) - minLat) * scale);
+      coords.push({ x: x, y: y });
+    }
+    return { coords: coords, scale: scale, cosLat: cosLat, width: width, height: height };
+  }
+
   function isDesiredTime(value) {
     return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   }
@@ -653,6 +694,7 @@
     shortenDisplayName: shortenDisplayName,
     nominatimViewbox: nominatimViewbox,
     errorText: errorText,
+    projectGeoPoints: projectGeoPoints,
     normalizePlan: normalizePlan,
     normalizePlanStore: normalizePlanStore,
     buildRouteUrl: buildRouteUrl

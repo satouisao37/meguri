@@ -456,44 +456,19 @@
   function renderMap() {
     var target = $('miniMap');
     var points = [state.departure].concat(state.places);
-    if (points.length < 2) {
+    var w = 420;
+    var h = 220;
+    // 歪み補正(cos緯度アスペクト保持＋レターボックス中央寄せ)は logic.js の純粋関数に集約。
+    var projection = L.projectGeoPoints(points, { width: w, height: h, pad: 36 });
+    if (!projection) {
       target.innerHTML = '<p class="empty">2点以上で表示します。</p>';
       return;
     }
-    var minLat = Infinity;
-    var maxLat = -Infinity;
-    var minLng = Infinity;
-    var maxLng = -Infinity;
-    for (var i = 0; i < points.length; i++) {
-      minLat = Math.min(minLat, points[i].lat);
-      maxLat = Math.max(maxLat, points[i].lat);
-      minLng = Math.min(minLng, points[i].lng);
-      maxLng = Math.max(maxLng, points[i].lng);
-    }
-    var pad = 36;
-    var w = 420;
-    var h = 220;
-    var availW = w - pad * 2;
-    var availH = h - pad * 2;
-    var midLat = (minLat + maxLat) / 2;
-    var cosLat = Math.cos(midLat * Math.PI / 180);
-    var lngGeoSpan = (maxLng - minLng) * cosLat;
-    var latSpan = maxLat - minLat;
-    var scale = Math.min(availW / (lngGeoSpan || 1e-9), availH / (latSpan || 1e-9));
-    var drawnW = lngGeoSpan * scale;
-    var drawnH = latSpan * scale;
-    var offsetX = pad + (availW - drawnW) / 2;
-    var offsetY = pad + (availH - drawnH) / 2;
-    function x(p) {
-      return offsetX + ((p.lng - minLng) * cosLat) * scale;
-    }
-    function y(p) {
-      return h - (offsetY + (p.lat - minLat) * scale);
-    }
-    var poly = points.map(function (p) { return x(p).toFixed(1) + ',' + y(p).toFixed(1); }).join(' ');
-    var dots = points.map(function (p, idx) {
+    var xy = projection.coords;   // points と同順の {x,y}(SVG 座標)。点ごと1回だけ計算
+    var poly = xy.map(function (c) { return c.x.toFixed(1) + ',' + c.y.toFixed(1); }).join(' ');
+    var dots = xy.map(function (c, idx) {
       var cls = idx === 0 ? 'start' : 'place';
-      return '<g><circle class="' + cls + '" cx="' + x(p).toFixed(1) + '" cy="' + y(p).toFixed(1) + '" r="7"></circle><text x="' + (x(p) + 11).toFixed(1) + '" y="' + (y(p) + 4).toFixed(1) + '">' + (idx === 0 ? 'S' : idx) + '</text></g>';
+      return '<g><circle class="' + cls + '" cx="' + c.x.toFixed(1) + '" cy="' + c.y.toFixed(1) + '" r="7"></circle><text x="' + (c.x + 11).toFixed(1) + '" y="' + (c.y + 4).toFixed(1) + '">' + (idx === 0 ? 'S' : idx) + '</text></g>';
     }).join('');
     var grid = [
       '<line class="grid-line" x1="' + (w / 4).toFixed(1) + '" y1="1" x2="' + (w / 4).toFixed(1) + '" y2="' + (h - 1) + '"></line>',

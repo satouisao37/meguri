@@ -67,6 +67,29 @@ assert('errorText は Load failed を平易化', L.errorText(new TypeError('Load
 assert('errorText は null を不明なエラーに', L.errorText(null) === '不明なエラー');
 assert('errorText は空 message の Error を不明なエラーに', L.errorText(new Error('')) === '不明なエラー');
 
+// projectGeoPoints: ミニ地図の歪み補正(cos緯度アスペクト保持＋レターボックス中央寄せ)
+var mapOpts = { width: 420, height: 220, pad: 36 };  // availW=348, availH=148, 中心=(210,110)
+// 補正後 lngGeoSpan == latSpan になる経度を作ると、画面上の外接矩形は正方形(=アスペクト保持)になる
+var mapMidCos = Math.cos(34.5 * Math.PI / 180);
+var sq = L.projectGeoPoints([{ lat: 34, lng: 135 }, { lat: 35, lng: 135 + 1 / mapMidCos }], mapOpts);
+near('射影 アスペクト保持: 補正後正方形は画面でも縦横同幅', Math.abs(sq.coords[1].x - sq.coords[0].x), Math.abs(sq.coords[0].y - sq.coords[1].y), 0.5);
+near('射影 中央寄せ: 横中心=width/2', (sq.coords[0].x + sq.coords[1].x) / 2, 210, 0.5);
+near('射影 中央寄せ: 縦中心=height/2', (sq.coords[0].y + sq.coords[1].y) / 2, 110, 0.5);
+// 縦が支配的な配置: 高さいっぱい(上端=pad, 下端=height-pad)に伸び、横はレターボックス中央寄せ
+var tall = L.projectGeoPoints([{ lat: 34, lng: 135 }, { lat: 35, lng: 135.1 }], mapOpts);
+near('射影 縦支配: 下端=height-pad', tall.coords[0].y, 184, 0.5);
+near('射影 縦支配: 上端=pad', tall.coords[1].y, 36, 0.5);
+near('射影 縦支配: 横は中央寄せ', (tall.coords[0].x + tall.coords[1].x) / 2, 210, 0.5);
+// 退化ケース
+var same = L.projectGeoPoints([{ lat: 35, lng: 135 }, { lat: 35, lng: 135 }], mapOpts);
+near('射影 退化: 同一2点はキャンバス中央X', same.coords[0].x, 210, 0.5);
+near('射影 退化: 同一2点はキャンバス中央Y', same.coords[0].y, 110, 0.5);
+var vert = L.projectGeoPoints([{ lat: 34, lng: 135 }, { lat: 35, lng: 135 }], mapOpts);
+near('射影 退化: 縦一直線は横中央', vert.coords[0].x, 210, 0.5);
+assert('射影 2点未満は null', L.projectGeoPoints([{ lat: 35, lng: 135 }]) === null);
+assert('射影 不正座標は null', L.projectGeoPoints([{ lat: NaN, lng: 135 }, { lat: 35, lng: 135 }]) === null);
+assert('射影 null 入力は null', L.projectGeoPoints(null) === null);
+
 var matrix = [
   [0, 20, 10, 60],
   [20, 0, 35, 50],
