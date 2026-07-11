@@ -525,6 +525,17 @@
     return { coords: coords, scale: scale, cosLat: cosLat, width: width, height: height };
   }
 
+  // 削除取り消しトーストの文言を作る純粋関数。消した場所名を「」で囲み、まだ戻せる削除が
+  // othersCount 件あれば「(ほかN件)」を付ける。名前が空なら「場所」、20字超は19字+… に短縮。
+  function undoToastText(name, othersCount) {
+    var label = (name === null || name === undefined) ? '' : String(name).trim();
+    if (!label) label = '場所';
+    if (label.length > 20) label = label.slice(0, 19) + '…';
+    var others = Number(othersCount);
+    if (!isFinite(others) || others < 0) others = 0;
+    return '「' + label + '」を削除しました' + (others > 0 ? '(ほか' + others + '件)' : '');
+  }
+
   function isDesiredTime(value) {
     return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   }
@@ -695,6 +706,7 @@
     nominatimViewbox: nominatimViewbox,
     errorText: errorText,
     projectGeoPoints: projectGeoPoints,
+    undoToastText: undoToastText,
     normalizePlan: normalizePlan,
     normalizePlanStore: normalizePlanStore,
     buildRouteUrl: buildRouteUrl

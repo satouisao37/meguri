@@ -19,7 +19,7 @@
   var lastSchedule = null;
   var matrixInfo = { label: '未計算', approximate: false };
   var calcBusy = false;          // 計算中フラグ(DOM の disabled に依存しない二重起動ガード)
-  var lastDeletedPlace = null;
+  var deletedStack = [];         // 削除取り消し用スタック(LIFO)。各要素 { place, index }
   var toastTimer = null;
 
   function $(id) {
@@ -87,7 +87,7 @@
     store.activeId = id;
     state = activePlan();
     lastSchedule = null;
-    lastDeletedPlace = null;
+    deletedStack = [];
     hideToast();
     persistStore();
     autoSchedule();
@@ -239,7 +239,7 @@
   function deletePlace(index) {
     var removed = state.places.splice(index, 1)[0];
     if (!removed) return;
-    lastDeletedPlace = { place: removed, index: index };
+    deletedStack.push({ place: removed, index: index });   // 連続削除は積み上げ、LIFO で個別に取り消せる
     lastSchedule = null;
     save();
     render();
@@ -259,25 +259,28 @@
   }
 
   function restoreDeletedPlace() {
-    if (!lastDeletedPlace) return;
-    var restore = lastDeletedPlace;
-    lastDeletedPlace = null;
+    var restore = deletedStack.pop();   // 最後に消したものから戻す(LIFO で index 整合)
+    if (!restore) return;
     state.places.splice(Math.min(restore.index, state.places.length), 0, restore.place);
     state.manualOrder = true;
     lastSchedule = null;
     save();
     render();
-    hideToast();
+    if (deletedStack.length) showUndoToast();   // まだ戻せる削除が残っていれば次を提示
+    else hideToast();
   }
 
   function showUndoToast() {
     var toast = $('toast');
     if (!toast) return;
+    var top = deletedStack[deletedStack.length - 1];
+    if (!top) { hideToast(); return; }
     if (toastTimer) clearTimeout(toastTimer);
     toast.innerHTML = '';
     var text = document.createElement('span');
     var button = document.createElement('button');
-    text.textContent = '削除しました';
+    // textContent なので場所名の < 等はそのまま安全に表示される
+    text.textContent = L.undoToastText(top.place && top.place.name, deletedStack.length - 1);
     button.type = 'button';
     button.textContent = '元に戻す';
     button.addEventListener('click', restoreDeletedPlace);
@@ -285,7 +288,7 @@
     toast.appendChild(button);
     toast.classList.add('show');
     toastTimer = setTimeout(function () {
-      lastDeletedPlace = null;
+      deletedStack = [];   // 6秒経過で undo 窓を閉じる(全件クリア)
       hideToast();
     }, 6000);
   }
@@ -744,7 +747,7 @@
           }
           state = activePlan();
           lastSchedule = null;
-          lastDeletedPlace = null;
+          deletedStack = [];
           hideToast();
           save();
           autoSchedule();

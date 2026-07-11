@@ -90,6 +90,14 @@ assert('射影 2点未満は null', L.projectGeoPoints([{ lat: 35, lng: 135 }]) 
 assert('射影 不正座標は null', L.projectGeoPoints([{ lat: NaN, lng: 135 }, { lat: 35, lng: 135 }]) === null);
 assert('射影 null 入力は null', L.projectGeoPoints(null) === null);
 
+// undoToastText: 削除取り消しトーストの文言(名前入り / 残件数 / 空名 / 長名短縮)
+assert('undoToastText 名前入り単件', L.undoToastText('清水寺', 0) === '「清水寺」を削除しました');
+assert('undoToastText 残件付き', L.undoToastText('二条城', 2) === '「二条城」を削除しました(ほか2件)');
+assert('undoToastText 空名は場所', L.undoToastText('', 0) === '「場所」を削除しました' && L.undoToastText(null, 0) === '「場所」を削除しました');
+var longName = L.undoToastText('あいうえおかきくけこさしすせそたちつてとなにぬねの', 0);
+assert('undoToastText 長名は19字+…', longName === '「あいうえおかきくけこさしすせそたちつて…」を削除しました');
+assert('undoToastText 負の残件は0扱い', L.undoToastText('嵐山', -3) === '「嵐山」を削除しました');
+
 var matrix = [
   [0, 20, 10, 60],
   [20, 0, 35, 50],
