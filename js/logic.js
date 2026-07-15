@@ -105,9 +105,11 @@
     var departMin = timeToMin(input.departTime) || 0;
     var mode = input.mode || 'car';
     var returnToStart = !!input.returnToStart;
-    var points = buildPointList(departure, places);
+    var realPlaces = places.filter(function (place) { return place.kind !== 'break'; });
+    var points = buildPointList(departure, realPlaces);
     var current = departMin;
-    var previousIndex = 0;
+    var prevReal = 0;
+    var realCursor = 0;
     var stops = [];
     var legs = [];
     var totalTravelMin = 0;
@@ -117,15 +119,17 @@
     var totalOverflowMin = 0;
 
     for (var i = 0; i < places.length; i++) {
-      var toIndex = i + 1;
-      var travel = durationFromMatrix(matrix, previousIndex, toIndex, points, mode);
+      var item = places[i];
+      var isBreak = item.kind === 'break';
+      var realIdx = realCursor + 1;
+      var travel = isBreak ? 0 : durationFromMatrix(matrix, prevReal, realIdx, points, mode);
       var roundedTravel = Math.round(travel);
       var arrival = current + travel;
-      var window = resolveWindow(places[i], departMin);
+      var window = resolveWindow(item, departMin);
       var wait = window.open !== null ? Math.max(0, window.open - arrival) : 0;
       var late = window.close !== null ? Math.max(0, arrival - window.close) : 0;
       var start = arrival + wait;
-      var stay = Math.max(0, Math.round(clampNumber(places[i].stayMin, 0)));
+      var stay = Math.max(0, Math.round(clampNumber(item.stayMin, 0)));
       var depart = start + stay;
       // 幅ゼロ窓(open===close=希望到着時刻)は「閉店」ではないので overflow の対象外。
       // 実際の閉店(open と異なる close、または open 無しの close)だけを制約とみなす。
@@ -133,14 +137,16 @@
       // 開店中に着いた(late===0)のに滞在が閉店をまたぐ超過分。遅刻時は late 側で計上済みなので二重に数えない。
       var overflow = (hasRealClose && late === 0) ? Math.max(0, depart - window.close) : 0;
       legs.push({
-        fromIndex: previousIndex,
-        toIndex: toIndex,
-        fromName: previousIndex === 0 ? departure.name : places[previousIndex - 1].name,
-        toName: places[i].name,
-        travelMin: roundedTravel
+        fromIndex: i === 0 ? 0 : i,
+        toIndex: i + 1,
+        fromName: i === 0 ? departure.name : places[i - 1].name,
+        toName: item.name,
+        travelMin: roundedTravel,
+        isBreak: isBreak
       });
       stops.push({
-        place: places[i],
+        place: item,
+        kind: item.kind || 'place',
         index: i,
         arrivalMin: Math.round(arrival),
         startMin: Math.round(start),
@@ -162,16 +168,19 @@
       totalLateMin += Math.round(late);
       totalOverflowMin += Math.round(overflow);
       current = depart;
-      previousIndex = toIndex;
+      if (!isBreak) {
+        prevReal = realIdx;
+        realCursor++;
+      }
     }
 
     var returnLeg = null;
-    if (returnToStart && places.length) {
-      var returnTravel = durationFromMatrix(matrix, previousIndex, 0, points, mode);
+    if (returnToStart && realPlaces.length) {
+      var returnTravel = durationFromMatrix(matrix, prevReal, 0, points, mode);
       returnLeg = {
-        fromIndex: previousIndex,
+        fromIndex: prevReal,
         toIndex: 0,
-        fromName: places[places.length - 1].name,
+        fromName: realPlaces[realPlaces.length - 1].name,
         toName: departure.name,
         travelMin: Math.round(returnTravel)
       };
@@ -260,8 +269,9 @@
     return out;
   }
 
-  function evaluateOrder(departure, sourcePlaces, order, matrix, input) {
-    return evaluate(departure, routeFromOrder(sourcePlaces, order), reorderMatrix(matrix, order), input);
+  function evaluateOrder(departure, sourcePlaces, order, matrix, input, interleaveBreaks) {
+    var ordered = routeFromOrder(sourcePlaces, order);
+    return evaluate(departure, interleaveBreaks ? interleaveBreaks(ordered) : ordered, reorderMatrix(matrix, order), input);
   }
 
   function nearestOrder(departure, places, matrix, input, rng) {
@@ -293,9 +303,9 @@
     return order;
   }
 
-  function improveOrder(order, departure, sourcePlaces, matrix, input) {
+  function improveOrder(order, departure, sourcePlaces, matrix, input, interleaveBreaks) {
     var bestOrder = order.slice();
-    var bestScore = evaluateOrder(departure, sourcePlaces, bestOrder, matrix, input).score;
+    var bestScore = evaluateOrder(departure, sourcePlaces, bestOrder, matrix, input, interleaveBreaks).score;
     var changed = true;
     var guard = 0;
     while (changed && guard < 80) {
@@ -304,7 +314,7 @@
       for (var i = 0; i < bestOrder.length - 1; i++) {
         for (var j = i + 1; j < bestOrder.length; j++) {
           var candidate = bestOrder.slice(0, i).concat(bestOrder.slice(i, j + 1).reverse(), bestOrder.slice(j + 1));
-          var score = evaluateOrder(departure, sourcePlaces, candidate, matrix, input).score;
+          var score = evaluateOrder(departure, sourcePlaces, candidate, matrix, input, interleaveBreaks).score;
           if (score + 0.0001 < bestScore) {
             bestOrder = candidate;
             bestScore = score;
@@ -319,7 +329,7 @@
           for (var pos = 0; pos <= rest.length; pos++) {
             if (pos === start) continue;
             var cand = rest.slice(0, pos).concat(block, rest.slice(pos));
-            var candScore = evaluateOrder(departure, sourcePlaces, cand, matrix, input).score;
+            var candScore = evaluateOrder(departure, sourcePlaces, cand, matrix, input, interleaveBreaks).score;
             if (candScore + 0.0001 < bestScore) {
               bestOrder = cand;
               bestScore = candScore;
@@ -334,10 +344,25 @@
 
   function optimizeRoute(input) {
     var places = (input.places || []).slice();
-    if (places.length > MAX_OPTIMIZE_PLACES) {
+    var realPlaces = places.filter(function (place) { return place.kind !== 'break'; });
+    if (realPlaces.length > MAX_OPTIMIZE_PLACES) {
       return { ok: false, error: '最適化できる場所は15件までです。件数を減らしてください。' };
     }
-    if (!input.departure || places.length === 0) {
+    var breaks = [];
+    var realBefore = 0;
+    for (var p = 0; p < places.length; p++) {
+      if (places[p].kind === 'break') breaks.push({ place: places[p], realBefore: realBefore });
+      else realBefore++;
+    }
+    function interleaveBreaks(orderedReal) {
+      var full = [];
+      for (var count = 0; count <= orderedReal.length; count++) {
+        for (var b = 0; b < breaks.length; b++) if (breaks[b].realBefore === count) full.push(breaks[b].place);
+        if (count < orderedReal.length) full.push(orderedReal[count]);
+      }
+      return full;
+    }
+    if (!input.departure || places.length === 0 || realPlaces.length === 0) {
       return { ok: true, places: places, schedule: evaluate(input.departure || {}, places, input.matrix || null, input) };
     }
     var matrix = input.matrix || null;
@@ -345,10 +370,9 @@
     var bestScore = Infinity;
     var bestSchedule = null;
 
-    if (places.length <= 8) {
-      permuteIndexes(places.length, function (order) {
-        var ordered = routeFromOrder(places, order);
-        var schedule = evaluate(input.departure, ordered, reorderMatrix(matrix, order), input);
+    if (realPlaces.length <= 8) {
+      permuteIndexes(realPlaces.length, function (order) {
+        var schedule = evaluateOrder(input.departure, realPlaces, order, matrix, input, interleaveBreaks);
         if (schedule.score < bestScore) {
           bestScore = schedule.score;
           bestOrder = order.slice();
@@ -358,28 +382,28 @@
     } else {
       var rng = makeRng(input.seed);
       for (var r = 0; r < 8; r++) {
-        var start = nearestOrder(input.departure, places, matrix, input, rng);
+        var start = nearestOrder(input.departure, realPlaces, matrix, input, rng);
         for (var s = start.length - 1; s > 0; s--) {
           var swap = Math.floor(rng() * (s + 1));
           var tmp = start[s];
           start[s] = start[swap];
           start[swap] = tmp;
         }
-        var improved = improveOrder(start, input.departure, places, matrix, input);
+        var improved = improveOrder(start, input.departure, realPlaces, matrix, input, interleaveBreaks);
         if (improved.score < bestScore) {
           bestScore = improved.score;
           bestOrder = improved.order.slice();
         }
       }
-      bestSchedule = evaluateOrder(input.departure, places, bestOrder, matrix, input);
+      bestSchedule = evaluateOrder(input.departure, realPlaces, bestOrder, matrix, input, interleaveBreaks);
     }
 
-    var bestPlaces = routeFromOrder(places, bestOrder);
+    var bestPlaces = interleaveBreaks(routeFromOrder(realPlaces, bestOrder));
     return {
       ok: true,
       places: bestPlaces,
       order: bestOrder,
-      schedule: bestSchedule || evaluate(input.departure, bestPlaces, matrix, input)
+      schedule: bestSchedule || evaluate(input.departure, bestPlaces, reorderMatrix(matrix, bestOrder), input)
     };
   }
 
@@ -579,6 +603,18 @@
 
   function normalizePlace(raw, index) {
     var source = raw || {};
+    if (source.kind === 'break') {
+      var breakStay = finiteNumber(source.stayMin);
+      if (breakStay === null || breakStay < 0) breakStay = 60;
+      return {
+        id: stringValue(source.id, 'b' + index),
+        kind: 'break',
+        name: stringValue(source.name, '休憩'),
+        stayMin: Math.round(breakStay),
+        open: isDesiredTime(source.open) ? source.open : null,
+        memo: stringValue(source.memo, '')
+      };
+    }
     var lat = finiteNumber(source.lat);
     var lng = finiteNumber(source.lng);
     if (lat === null || lng === null) return null;
@@ -592,6 +628,7 @@
     }
     return {
       id: stringValue(source.id, 'p' + index),
+      kind: 'place',
       name: stringValue(source.name, ''),
       lat: lat,
       lng: lng,
@@ -609,11 +646,12 @@
     var options = opts || {};
     var departure = options.departure;
     var places = options.places instanceof Array ? options.places : [];
-    if (!departure || !places.length) return null;
+    var real = places.filter(function (place) { return place.kind !== 'break'; });
+    if (!departure || !real.length) return null;
     var travelMode = options.mode === 'transit' ? 'transit' : 'driving';
     var returnToStart = !!options.returnToStart;
-    var destination = returnToStart ? departure : places[places.length - 1];
-    var waypoints = returnToStart ? places.slice() : places.slice(0, places.length - 1);
+    var destination = returnToStart ? departure : real[real.length - 1];
+    var waypoints = returnToStart ? real.slice() : real.slice(0, real.length - 1);
     if (waypoints.length > MAX_WAYPOINTS) return null;
     function coord(point) {
       return encodeURIComponent(clampNumber(point.lat, 0) + ',' + clampNumber(point.lng, 0));
@@ -684,6 +722,13 @@
     var compactPlaces = [];
     for (var i = 0; i < places.length; i++) {
       var place = places[i] || {};
+      if (place.kind === 'break') {
+        var rest = { b: 1, n: place.name || '', s: Math.round(place.stayMin), o: place.open || '', m: place.memo || '' };
+        if (!rest.o) delete rest.o;
+        if (!rest.m) delete rest.m;
+        compactPlaces.push(rest);
+        continue;
+      }
       var tuple = [
         place.name || '',
         round5(place.lat),
@@ -722,6 +767,9 @@
       mode: obj.m === 't' ? 'transit' : 'car',
       returnToStart: !!obj.r,
       places: tuples.map(function (source) {
+        if (source && source.b) {
+          return { kind: 'break', name: source.n, stayMin: source.s, open: source.o || null, memo: source.m || '' };
+        }
         var tuple = source instanceof Array ? source : [];
         return {
           name: tuple[0], lat: tuple[1], lng: tuple[2], stayMin: tuple[3],

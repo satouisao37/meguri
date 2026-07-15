@@ -120,6 +120,44 @@ assert('遅刻を記録', schedule.stops[1].lateMin === 140);
 assert('帰路を総移動に含める', schedule.totalTravelMin === 65);
 assert('帰着時刻を計算', schedule.finishTime === '12:15');
 
+var lunchBreak = { id: 'lunch', kind: 'break', name: '昼食', stayMin: 45, open: null, memo: '' };
+var breakSchedule = L.scheduleRoute({
+  departure: kyoto, departTime: '09:00', mode: 'car', returnToStart: false,
+  matrix: [[0, 20, 40], [20, 0, 10], [40, 10, 0]],
+  places: [
+    { id: 'bp1', kind: 'place', name: '前半', lat: 35, lng: 135, stayMin: 30, memo: '' },
+    lunchBreak,
+    { id: 'bp2', kind: 'place', name: '後半', lat: 35.1, lng: 135.1, stayMin: 20, memo: '' }
+  ]
+});
+assert('休憩は移動時間ゼロ', breakSchedule.legs[1].isBreak === true && breakSchedule.legs[1].travelMin === 0);
+assert('休憩後の到着は直前の実地点からの移動だけを足す', breakSchedule.stops[2].arrivalMin === breakSchedule.stops[0].departMin + 45 + 10);
+assert('休憩の所要時間を総滞在へ含める', breakSchedule.totalStayMin === 95);
+
+var desiredBreak = L.scheduleRoute({
+  departure: kyoto, departTime: '09:00', mode: 'car', matrix: [[0]],
+  places: [{ id: 'wait-break', kind: 'break', name: '昼食', stayMin: 30, open: '12:00', memo: '' }]
+});
+assert('休憩の希望開始時刻まで待機する', desiredBreak.stops[0].waitMin === 180 && desiredBreak.stops[0].start === '12:00');
+
+var returnAfterBreak = L.scheduleRoute({
+  departure: kyoto, departTime: '09:00', mode: 'car', returnToStart: true,
+  matrix: [[0, 20], [35, 0]],
+  places: [{ id: 'return-place', name: '実地点', lat: 35, lng: 135, stayMin: 0, memo: '' }, lunchBreak]
+});
+assert('最後が休憩でも帰路は最後の実地点から計算する', returnAfterBreak.returnLeg.fromName === '実地点' && returnAfterBreak.returnLeg.travelMin === 35);
+
+var pinnedBreak = L.optimizeRoute({
+  departure: kyoto, departTime: '09:00', mode: 'car', matrix: [[0, 40, 10], [40, 0, 10], [10, 10, 0]],
+  places: [
+    { id: 'pin-a', name: '遠い', lat: 35, lng: 135, stayMin: 0, memo: '' },
+    { id: 'pin-break', kind: 'break', name: '休憩', stayMin: 25, open: null, memo: '' },
+    { id: 'pin-b', name: '近い', lat: 35.1, lng: 135.1, stayMin: 0, memo: '' }
+  ]
+});
+assert('最適化後も休憩は先行実地点1件の位置に固定される', pinnedBreak.places[1].kind === 'break' && pinnedBreak.places[0].id === 'pin-b');
+assert('最適化の採点に休憩の所要時間を含める', pinnedBreak.schedule.totalStayMin === 25);
+
 var desiredWindow = L.resolveWindow({ desired: '10:00' }, L.timeToMin('09:00'));
 assert('resolveWindow は desired を幅ゼロ窓にする', desiredWindow.open === 600 && desiredWindow.close === 600);
 var wrappedWindow = L.resolveWindow({ open: '23:30', close: '01:00' }, L.timeToMin('23:00'));
@@ -289,6 +327,9 @@ for (var w = 0; w < 11; w++) {
 assert('経由地9件は全行程URLを作る', L.buildRouteUrl({ departure: kyoto, places: overWaypoints.slice(0, 10), returnToStart: false, mode: 'car' }) !== null);
 assert('経由地10件は全行程URLを作らない', L.buildRouteUrl({ departure: kyoto, places: overWaypoints, returnToStart: false, mode: 'car' }) === null);
 assert('訪問地が無ければ null', L.buildRouteUrl({ departure: kyoto, places: [], mode: 'car' }) === null);
+var breakRouteUrl = L.buildRouteUrl({ departure: kyoto, places: [kiyomizu, lunchBreak, nijo], returnToStart: false, mode: 'car' });
+assert('全行程URLは休憩を除外する', breakRouteUrl.indexOf('昼食') === -1 && breakRouteUrl.indexOf('destination=' + enc(nijo)) !== -1 && breakRouteUrl.indexOf('waypoints=' + enc(kiyomizu)) !== -1);
+assert('実地点のない休憩だけでは全行程URLを作らない', L.buildRouteUrl({ departure: kyoto, places: [lunchBreak], mode: 'car' }) === null);
 
 var many = [];
 for (var i = 0; i < 16; i++) {
@@ -397,6 +438,11 @@ near('共有往復は出発経度を5桁に丸める', shared.departure.lng, 135
 assert('共有往復は場所数を保持', shared.places.length === 2);
 assert('共有往復は場所の詳細を保持', shared.places[0].name === '清水寺' && shared.places[0].stayMin === 65 && shared.places[0].open === '09:00' && shared.places[0].close === '17:00' && shared.places[0].memo === '混雑前に到着');
 assert('共有の可変長タプルは空の時間帯とメモを復元', shared.places[1].open === null && shared.places[1].close === null && shared.places[1].memo === '');
+
+var breakShared = L.decodeSharePlan(L.encodeSharePlan({
+  departure: kyoto, departTime: '09:00', mode: 'car', places: [kiyomizu, { kind: 'break', name: '昼食', stayMin: 50, open: '12:00', memo: '予約済み' }]
+}), storeDefaults);
+assert('共有往復は休憩の種別と詳細を保持', breakShared.places[1].kind === 'break' && breakShared.places[1].name === '昼食' && breakShared.places[1].stayMin === 50 && breakShared.places[1].open === '12:00' && breakShared.places[1].memo === '予約済み');
 
 var transitShare = L.decodeSharePlan(L.encodeSharePlan({
   departure: kyoto, departTime: '09:00', mode: 'transit', places: []
