@@ -266,12 +266,13 @@
   }
 
   function addPlace(place) {
-    if (state.places.length >= L.MAX_OPTIMIZE_PLACES) {
+    if (state.places.filter(function (item) { return item.kind !== 'break'; }).length >= L.MAX_OPTIMIZE_PLACES) {
       setMessage('場所は15件までです。');
       return;
     }
     state.places.push({
       id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      kind: 'place',
       name: place.name || '地点',
       lat: Number(place.lat),
       lng: Number(place.lng),
@@ -279,6 +280,17 @@
       close: null,
       stayMin: 60,
       memo: ''
+    });
+    state.manualOrder = true;
+    lastSchedule = null;
+    save();
+    render();
+  }
+
+  function addBreak() {
+    state.places.push({
+      id: 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      kind: 'break', name: '昼食', stayMin: 60, open: null, memo: ''
     });
     state.manualOrder = true;
     lastSchedule = null;
@@ -433,8 +445,25 @@
       var leg = legForIndex(i);
       var article = document.createElement('article');
       article.className = 'stop';
-      var from = i === 0 ? state.departure : state.places[i - 1];
-      timeline.insertAdjacentHTML('beforeend', renderLeg(leg, googleLink(from, place), false));
+      var from = state.departure;
+      for (var previous = i - 1; previous >= 0; previous--) {
+        if (state.places[previous].kind !== 'break') {
+          from = state.places[previous];
+          break;
+        }
+      }
+      timeline.insertAdjacentHTML('beforeend', renderLeg(leg, place.kind === 'break' ? null : googleLink(from, place), false));
+      if (place.kind === 'break') {
+        article.className += ' break-stop';
+        article.innerHTML =
+          '<div class="rail"><span>休</span></div><div class="stop-body">' +
+          '<div class="stop-top"><input class="name" data-field="name" data-index="' + i + '" value="' + escapeAttr(place.name) + '">' + renderArrival(stop) +
+          '<div class="move"><button type="button" data-up="' + i + '" aria-label="上へ">↑</button><button type="button" data-down="' + i + '" aria-label="下へ">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
+          renderTimes(stop) +
+          '<div class="grid two"><label>所要時間(分)<input type="number" min="0" step="5" data-field="stayMin" data-index="' + i + '" value="' + escapeAttr(place.stayMin) + '"></label>' +
+          '<label>希望開始時刻<input type="time" data-field="open" data-index="' + i + '" value="' + escapeAttr(place.open || '') + '"></label></div>' +
+          '<label>メモ<textarea data-field="memo" data-index="' + i + '">' + escapeHtml(place.memo || '') + '</textarea></label></div>';
+      } else {
       article.innerHTML =
         '<div class="rail"><span>' + (i + 1) + '</span></div>' +
         '<div class="stop-body">' +
@@ -455,6 +484,7 @@
         '<label>メモ<textarea data-field="memo" data-index="' + i + '">' + escapeHtml(place.memo || '') + '</textarea></label>' +
         '</details>' +
         '</div>';
+      }
       timeline.appendChild(article);
     }
     renderReturnLeg(timeline);
@@ -462,7 +492,7 @@
 
   function renderReturnLeg(timeline) {
     if (!lastSchedule || !lastSchedule.returnLeg) return;
-    var from = state.places[state.places.length - 1];
+    var from = state.places.filter(function (place) { return place.kind !== 'break'; }).pop();
     timeline.insertAdjacentHTML('beforeend', renderLeg(lastSchedule.returnLeg, googleLink(from, state.departure), true));
     timeline.insertAdjacentHTML('beforeend', renderTerminalStop('return-stop', 'G', state.departure.name || '出発地', '帰着 ' + lastSchedule.finishTime));
   }
@@ -477,6 +507,7 @@
   }
 
   function renderLeg(leg, link, isReturn) {
+    if (leg && leg.isBreak) return '<article class="leg"><div class="rail"></div><div class="leg-body"><span>休憩</span></div></article>';
     var label = leg && matrixInfo.approximate ? '<span class="badge warn">' + (state.mode === 'transit' ? '目安' : '概算') + '</span>' : '';
     return '<article class="leg">' +
       '<div class="rail"></div>' +
@@ -484,7 +515,7 @@
       (isReturn ? '<span>帰路</span>' : '') +
       '<span>移動 ' + (leg ? fmtMin(leg.travelMin) : '-') + '</span>' +
       label +
-      '<a href="' + link + '" target="_blank" rel="noopener">Google マップ</a>' +
+      (link ? '<a href="' + link + '" target="_blank" rel="noopener">Google マップ</a>' : '') +
       '</div>' +
       '</article>';
   }
@@ -519,7 +550,7 @@
 
   function renderMap() {
     var target = $('miniMap');
-    var points = [state.departure].concat(state.places);
+    var points = [state.departure].concat(state.places.filter(function (place) { return place.kind !== 'break'; }));
     var w = 420;
     var h = 220;
     // 歪み補正(cos緯度アスペクト保持＋レターボックス中央寄せ)は logic.js の純粋関数に集約。
@@ -614,7 +645,7 @@
   }
 
   function buildMatrix() {
-    var points = [state.departure].concat(state.places);
+    var points = [state.departure].concat(state.places.filter(function (place) { return place.kind !== 'break'; }));
     if (state.mode === 'transit') {
       return Promise.resolve({ matrix: L.estimateMatrix(points, 'transit'), label: '目安', approximate: true });
     }
@@ -628,7 +659,7 @@
   // 起動時の自動計算用: ネットワークを叩かず行列を用意する。
   // 公共交通=目安式、車=OSRM キャッシュがあれば使い、無ければ概算。
   function buildMatrixFromCache() {
-    var points = [state.departure].concat(state.places);
+    var points = [state.departure].concat(state.places.filter(function (place) { return place.kind !== 'break'; }));
     if (state.mode === 'transit') {
       return { matrix: L.estimateMatrix(points, 'transit'), label: '目安', approximate: true };
     }
@@ -644,7 +675,7 @@
       setMessage('出発地の緯度経度を指定してください。');
       return;
     }
-    if (state.places.length > L.MAX_OPTIMIZE_PLACES) {
+    if (state.places.filter(function (place) { return place.kind !== 'break'; }).length > L.MAX_OPTIMIZE_PLACES) {
       setMessage('最適化できる場所は15件までです。');
       return;
     }
@@ -743,6 +774,7 @@
     });
     $('departureSearchBtn').addEventListener('click', function () { searchPlace('departure'); });
     $('placeSearchBtn').addEventListener('click', function () { searchPlace('place'); });
+    $('addBreakBtn').addEventListener('click', addBreak);
     $('addCoordBtn').addEventListener('click', function () {
       var coord = L.normalizeLatLng($('placeSearch').value);
       if (!coord) {
