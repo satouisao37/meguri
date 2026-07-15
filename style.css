@@ -497,6 +497,30 @@ textarea {
   padding: 2px 6px;
 }
 
+.drag-handle {
+  cursor: grab;
+  touch-action: none;
+  color: var(--rz-text-2);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.stop.dragging {
+  position: relative;
+  z-index: 5;
+  background: var(--rz-surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--rz-text) 18%, transparent);
+}
+
+.drop-indicator {
+  grid-column: 1 / -1;
+  height: 2px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
 .move button[data-del]:hover {
   border-color: var(--rz-crit);
   color: var(--rz-crit);
