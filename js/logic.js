@@ -114,6 +114,7 @@
     var totalStayMin = 0;
     var totalWaitMin = 0;
     var totalLateMin = 0;
+    var totalOverflowMin = 0;
 
     for (var i = 0; i < places.length; i++) {
       var toIndex = i + 1;
@@ -126,6 +127,11 @@
       var start = arrival + wait;
       var stay = Math.max(0, Math.round(clampNumber(places[i].stayMin, 0)));
       var depart = start + stay;
+      // 幅ゼロ窓(open===close=希望到着時刻)は「閉店」ではないので overflow の対象外。
+      // 実際の閉店(open と異なる close、または open 無しの close)だけを制約とみなす。
+      var hasRealClose = window.close !== null && window.open !== window.close;
+      // 開店中に着いた(late===0)のに滞在が閉店をまたぐ超過分。遅刻時は late 側で計上済みなので二重に数えない。
+      var overflow = (hasRealClose && late === 0) ? Math.max(0, depart - window.close) : 0;
       legs.push({
         fromIndex: previousIndex,
         toIndex: toIndex,
@@ -144,15 +150,17 @@
         depart: formatClock(depart),
         waitMin: Math.round(wait),
         lateMin: Math.round(late),
+        overflowMin: Math.round(overflow),
         openMin: window.open,
         closeMin: window.close,
-        stayEndsAfterClose: window.close !== null && late === 0 && depart > window.close,
+        stayEndsAfterClose: hasRealClose && late === 0 && overflow > 0,
         stayMin: stay
       });
       totalTravelMin += roundedTravel;
       totalStayMin += stay;
       totalWaitMin += Math.round(wait);
       totalLateMin += Math.round(late);
+      totalOverflowMin += Math.round(overflow);
       current = depart;
       previousIndex = toIndex;
     }
@@ -183,12 +191,14 @@
       totalStayMin: totalStayMin,
       totalWaitMin: totalWaitMin,
       totalLateMin: totalLateMin,
-      score: scoreSchedule(totalTravelMin, totalLateMin, totalWaitMin)
+      totalOverflowMin: totalOverflowMin,
+      score: scoreSchedule(totalTravelMin, totalLateMin, totalWaitMin, totalOverflowMin)
     };
   }
 
-  function scoreSchedule(travel, late, wait) {
-    return travel + 3 * late + 0.3 * wait;
+  // overflow(閉店をまたぐ滞在超過)は「全部逃す late(×3)」より軽く「待機(×0.3)」より重い中間の重み。
+  function scoreSchedule(travel, late, wait, overflow) {
+    return travel + 3 * late + 1.5 * (overflow || 0) + 0.3 * wait;
   }
 
   function permuteIndexes(n, visitor) {

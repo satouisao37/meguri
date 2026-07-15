@@ -161,6 +161,36 @@ assert('到着は間に合うが滞在が閉店を超える', overClose.stops[0]
 assert('閉店後到着は滞在超過扱いにしない', lateWindow.stops[0].stayEndsAfterClose === false);
 assert('閉店前に出る場合は滞在超過にしない', inWindow.stops[0].stayEndsAfterClose === false);
 
+// overflow(閉店をまたぐ滞在超過)をスコアに計上する(#19)
+assert('滞在超過分を overflowMin に記録', overClose.stops[0].overflowMin === 30 && overClose.totalOverflowMin === 30);
+assert('スコアは overflow を 1.5 倍で加算', overClose.score === 480 + 1.5 * 30); // travel480 + late0 + overflow30*1.5 + wait0
+assert('閉店後到着は overflow に二重計上しない', lateWindow.stops[0].overflowMin === 0 && lateWindow.totalOverflowMin === 0);
+assert('閉店前に出る場合は overflow なし', inWindow.stops[0].overflowMin === 0);
+// 希望到着(幅ゼロ窓 open===close)は「閉店」ではない → overflow も滞在超過バッジも出さない
+var desiredZeroWidth = L.scheduleRoute({
+  departure: kyoto,
+  departTime: '09:00',
+  mode: 'car',
+  matrix: [[0, 20], [20, 0]],
+  places: [{ id: 'z1', name: '希望到着', lat: 35, lng: 135, open: '10:00', close: '10:00', stayMin: 60, memo: '' }]
+});
+assert('希望到着(幅ゼロ窓)は overflow を出さない', desiredZeroWidth.stops[0].overflowMin === 0 && desiredZeroWidth.totalOverflowMin === 0);
+assert('希望到着(幅ゼロ窓)は滞在超過バッジを出さない', desiredZeroWidth.stops[0].stayEndsAfterClose === false);
+// 最適化は overflow を避ける順序を選ぶ(travel も late も同点で、差は overflow のみ)
+var overflowOpt = L.optimizeRoute({
+  departure: kyoto,
+  departTime: '09:00',
+  mode: 'car',
+  returnToStart: false,
+  matrix: [[0, 20, 20], [20, 0, 20], [20, 20, 0]],
+  places: [
+    { id: 'A', name: '11時閉店', lat: 35.0, lng: 135.0, open: null, close: '11:00', stayMin: 30, memo: '' },
+    { id: 'B', name: '窓なし長居', lat: 35.1, lng: 135.1, open: null, close: null, stayMin: 60, memo: '' }
+  ],
+  seed: 3
+});
+assert('最適化は閉店をまたがない順序を選ぶ', overflowOpt.places[0].id === 'A' && overflowOpt.schedule.totalOverflowMin === 0);
+
 assert('formatClock 当日は素の時刻', L.formatClock(90) === '01:30');
 assert('formatClock 23:59 境界', L.formatClock(1439) === '23:59');
 assert('formatClock 翌0時', L.formatClock(1440) === '翌 00:00');
