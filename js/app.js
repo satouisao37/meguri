@@ -21,6 +21,7 @@
   var calcBusy = false;          // 計算中フラグ(DOM の disabled に依存しない二重起動ガード)
   var deletedStack = [];         // 削除取り消し用スタック(LIFO)。各要素 { place, index }
   var toastTimer = null;
+  var drag = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -309,6 +310,20 @@
     render();
   }
 
+  function movePlaceTo(from, insertBefore) {
+    if (from < 0 || from >= state.places.length) return;
+    var to = insertBefore > from ? insertBefore - 1 : insertBefore;
+    if (to < 0) to = 0;
+    if (to > state.places.length - 1) to = state.places.length - 1;
+    if (to === from) return;
+    var item = state.places.splice(from, 1)[0];
+    state.places.splice(to, 0, item);
+    state.manualOrder = true;
+    lastSchedule = null;
+    save();
+    render();
+  }
+
   function deletePlace(index) {
     var removed = state.places.splice(index, 1)[0];
     if (!removed) return;
@@ -462,6 +477,7 @@
       var leg = legForIndex(i);
       var article = document.createElement('article');
       article.className = 'stop';
+      article.setAttribute('data-index', i);
       var from = state.departure;
       for (var previous = i - 1; previous >= 0; previous--) {
         if (state.places[previous].kind !== 'break') {
@@ -475,7 +491,7 @@
         article.innerHTML =
           '<div class="rail"><span>休</span></div><div class="stop-body">' +
           '<div class="stop-top"><input class="name" data-field="name" data-index="' + i + '" value="' + escapeAttr(place.name) + '">' + renderArrival(stop) +
-          '<div class="move"><button type="button" data-up="' + i + '" aria-label="上へ">↑</button><button type="button" data-down="' + i + '" aria-label="下へ">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
+          '<div class="move"><button type="button" class="drag-handle" data-index="' + i + '" aria-label="ドラッグで並び替え" title="ドラッグで並び替え">⠿</button><button type="button" data-up="' + i + '" aria-label="上へ">↑</button><button type="button" data-down="' + i + '" aria-label="下へ">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
           renderTimes(stop) +
           '<div class="grid two"><label>所要時間(分)<input type="number" min="0" step="5" data-field="stayMin" data-index="' + i + '" value="' + escapeAttr(place.stayMin) + '"></label>' +
           '<label>希望開始時刻<input type="time" data-field="open" data-index="' + i + '" value="' + escapeAttr(place.open || '') + '"></label></div>' +
@@ -486,7 +502,7 @@
         '<div class="stop-body">' +
         '<div class="stop-top"><input class="name" data-field="name" data-index="' + i + '" value="' + escapeAttr(place.name) + '">' +
         renderArrival(stop) +
-        '<div class="move"><button type="button" data-up="' + i + '" aria-label="上へ">↑</button><button type="button" data-down="' + i + '" aria-label="下へ">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
+        '<div class="move"><button type="button" class="drag-handle" data-index="' + i + '" aria-label="ドラッグで並び替え" title="ドラッグで並び替え">⠿</button><button type="button" data-up="' + i + '" aria-label="上へ">↑</button><button type="button" data-down="' + i + '" aria-label="下へ">↓</button><button type="button" data-del="' + i + '">削除</button></div></div>' +
         renderTimes(stop) +
         '<div class="grid two">' +
         '<label>開始<input type="time" data-field="open" data-index="' + i + '" value="' + escapeAttr(place.open || '') + '"></label>' +
@@ -890,6 +906,58 @@
       if (target.hasAttribute('data-up')) movePlace(Number(target.getAttribute('data-up')), -1);
       if (target.hasAttribute('data-down')) movePlace(Number(target.getAttribute('data-down')), 1);
       if (target.hasAttribute('data-del')) deletePlace(Number(target.getAttribute('data-del')));
+    });
+    $('timeline').addEventListener('pointerdown', function (event) {
+      var handle = event.target.closest('.drag-handle');
+      if (!handle) return;
+      var article = handle.closest('article.stop');
+      var from = Number(handle.getAttribute('data-index'));
+      if (!article || !isFinite(from)) return;
+      event.preventDefault();
+      handle.setPointerCapture(event.pointerId);
+      drag = { from: from, pointerId: event.pointerId, startY: event.clientY, article: article, handle: handle };
+      article.classList.add('dragging');
+    });
+    $('timeline').addEventListener('pointermove', function (event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      event.preventDefault();
+      drag.article.style.transform = 'translateY(' + (event.clientY - drag.startY) + 'px)';
+      var rows = Array.prototype.slice.call($('timeline').querySelectorAll('article.stop[data-index]'));
+      var insertBefore = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var rect = rows[i].getBoundingClientRect();
+        if (rect.top + rect.height / 2 < event.clientY) insertBefore++;
+      }
+      var indicator = $('timeline').querySelector('.drop-indicator');
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.className = 'drop-indicator';
+      }
+      if (rows[insertBefore]) {
+        $('timeline').insertBefore(indicator, rows[insertBefore]);
+      } else {
+        $('timeline').insertBefore(indicator, rows[rows.length - 1].nextSibling);
+      }
+      drag.to = insertBefore;
+    });
+    function finishDrag(cancelled) {
+      if (!drag) return;
+      var current = drag;
+      current.article.classList.remove('dragging');
+      current.article.style.transform = '';
+      var indicator = $('timeline').querySelector('.drop-indicator');
+      if (indicator) indicator.remove();
+      if (current.handle.hasPointerCapture(current.pointerId)) current.handle.releasePointerCapture(current.pointerId);
+      drag = null;
+      if (!cancelled) movePlaceTo(current.from, current.to === undefined ? current.from : current.to);
+    }
+    $('timeline').addEventListener('pointerup', function (event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      finishDrag(false);
+    });
+    $('timeline').addEventListener('pointercancel', function (event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      finishDrag(true);
     });
     $('timeline').addEventListener('change', function (event) {
       var target = event.target;
