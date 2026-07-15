@@ -310,9 +310,9 @@
     render();
   }
 
-  function movePlaceTo(from, insertBefore) {
+  // to = 掴んだ行を抜いた後の挿入先 index(= pointer より上にある「他の」行の数)。
+  function movePlaceTo(from, to) {
     if (from < 0 || from >= state.places.length) return;
-    var to = insertBefore > from ? insertBefore - 1 : insertBefore;
     if (to < 0) to = 0;
     if (to > state.places.length - 1) to = state.places.length - 1;
     if (to === from) return;
@@ -915,30 +915,32 @@
       if (!article || !isFinite(from)) return;
       event.preventDefault();
       handle.setPointerCapture(event.pointerId);
-      drag = { from: from, pointerId: event.pointerId, startY: event.clientY, article: article, handle: handle };
+      // 掴んだ瞬間に「他の行」の中点Yを採取して固定する。ドラッグ中はインジケータ挿入で
+      // リフローが起きて live な rect がずれるため、採取値で挿入先を判定する(掴んだ行は除外)。
+      var others = Array.prototype.slice.call($('timeline').querySelectorAll('article.stop[data-index]'))
+        .filter(function (row) { return row !== article; })
+        .map(function (row) { var rect = row.getBoundingClientRect(); return { el: row, mid: rect.top + rect.height / 2 }; });
+      drag = { from: from, pointerId: event.pointerId, startY: event.clientY, article: article, handle: handle, others: others, to: from };
       article.classList.add('dragging');
     });
     $('timeline').addEventListener('pointermove', function (event) {
       if (!drag || event.pointerId !== drag.pointerId) return;
       event.preventDefault();
       drag.article.style.transform = 'translateY(' + (event.clientY - drag.startY) + 'px)';
-      var rows = Array.prototype.slice.call($('timeline').querySelectorAll('article.stop[data-index]'));
-      var insertBefore = 0;
-      for (var i = 0; i < rows.length; i++) {
-        var rect = rows[i].getBoundingClientRect();
-        if (rect.top + rect.height / 2 < event.clientY) insertBefore++;
-      }
+      // 採取済みの中点(掴んだ行を除く)で、pointer より上にある行数 = 挿入先 index。
+      var others = drag.others;
+      var to = 0;
+      for (var i = 0; i < others.length; i++) { if (others[i].mid < event.clientY) to++; }
       var indicator = $('timeline').querySelector('.drop-indicator');
       if (!indicator) {
         indicator = document.createElement('div');
         indicator.className = 'drop-indicator';
       }
-      if (rows[insertBefore]) {
-        $('timeline').insertBefore(indicator, rows[insertBefore]);
-      } else {
-        $('timeline').insertBefore(indicator, rows[rows.length - 1].nextSibling);
+      if (others.length) {
+        if (others[to]) $('timeline').insertBefore(indicator, others[to].el);
+        else $('timeline').insertBefore(indicator, others[others.length - 1].el.nextSibling);
       }
-      drag.to = insertBefore;
+      drag.to = to;
     });
     function finishDrag(cancelled) {
       if (!drag) return;
