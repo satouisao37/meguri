@@ -331,6 +331,23 @@
     }
   }
 
+  // 新バージョンの SW を検知したら「再読込」を促す永続トースト。削除取消トースト(#toast)とは
+  // 別要素なので互いに干渉しない。二重表示しないよう既に show 済みなら何もしない。
+  function showUpdateToast() {
+    var el = $('updateToast');
+    if (!el || el.classList.contains('show')) return;
+    el.innerHTML = '';
+    var text = document.createElement('span');
+    text.textContent = '新しいバージョンがあります';
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = '再読込';
+    button.addEventListener('click', function () { location.reload(); });
+    el.appendChild(text);
+    el.appendChild(button);
+    el.classList.add('show');
+  }
+
   function restoreDeletedPlace() {
     var restore = deletedStack.pop();   // 最後に消したものから戻す(LIFO で index 整合)
     if (!restore) return;
@@ -913,7 +930,18 @@
     autoSchedule();
     render();
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(function () {});
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+        // 既に制御中の SW がある状態で新 SW が installed = 初回導入でなく「更新」。SWR は反映が
+        // 1回遅れるので、更新トーストで即リロードを促す(自動リロードはしない=明示操作)。
+        function onNewWorker(worker) {
+          if (!worker) return;
+          worker.addEventListener('statechange', function () {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) showUpdateToast();
+          });
+        }
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdateToast();
+        reg.addEventListener('updatefound', function () { onNewWorker(reg.installing); });
+      }).catch(function () {});
     }
   });
 })();

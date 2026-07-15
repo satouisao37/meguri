@@ -1,6 +1,6 @@
 'use strict';
 
-var CACHE_VERSION = 'meguri-v1.7.0';
+var CACHE_VERSION = 'meguri-v1.8.0';
 var ASSETS = [
   '.',
   'index.html',
