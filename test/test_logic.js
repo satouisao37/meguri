@@ -337,6 +337,34 @@ for (var i = 0; i < 16; i++) {
 }
 assert('16件は拒否', L.optimizeRoute({ departure: kyoto, places: many }).ok === false);
 
+// 実地点9件はヒューリスティック分岐(最近傍+2-opt/or-opt+乱数リスタート)を通る。
+// 一直線配置(距離=座標差の絶対値)は開放経路の最適解が昇順で一意なので、収束先で検証する。
+var linePositions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; // index0=出発地, 1..9=実地点
+var lineMatrix = [];
+for (var lm = 0; lm < linePositions.length; lm++) {
+  lineMatrix[lm] = [];
+  for (var ln = 0; ln < linePositions.length; ln++) {
+    lineMatrix[lm][ln] = Math.abs(linePositions[lm] - linePositions[ln]);
+  }
+}
+var linePlaces = [];
+for (var lq = 1; lq <= 9; lq++) {
+  linePlaces.push({ id: 'line' + lq, name: '直線' + lq, lat: 35 + lq * 0.01, lng: 135, stayMin: 0, memo: '' });
+}
+function optimizeLine(seed) {
+  return L.optimizeRoute({
+    departure: kyoto, departTime: '09:00', mode: 'car', returnToStart: false,
+    matrix: lineMatrix, places: linePlaces, seed: seed
+  });
+}
+var heuristic = optimizeLine(42);
+assert('9件はヒューリスティック経路で最適化成功', heuristic.ok === true && heuristic.schedule.stops.length === 9);
+assert('一直線配置は昇順の最適解へ収束(総移動9分)', heuristic.schedule.totalTravelMin === 9 && heuristic.order.join(',') === '0,1,2,3,4,5,6,7,8');
+var heuristicAgain = optimizeLine(42);
+assert('同一シードは同一順序・同一スコアを返す(決定性)', heuristicAgain.order.join(',') === heuristic.order.join(',') && heuristicAgain.schedule.score === heuristic.schedule.score);
+var heuristicOtherSeed = optimizeLine(99);
+assert('別シードでも有効な最適化を返す', heuristicOtherSeed.ok === true && heuristicOtherSeed.schedule.stops.length === 9 && isFinite(heuristicOtherSeed.schedule.score));
+
 var normalized = L.normalizePlan({
   mode: 'walk',
   returnToStart: true,
