@@ -1,7 +1,7 @@
 # めぐり (meguri)
 
 観光で行きたい場所を登録し、希望到着時刻・滞在時間を考慮した最適訪問順を車/公共交通の2モードで計算する PWA。
-詳細仕様は末尾の spec.md(着手前に Read)。リポジトリ: `satouisao37/meguri`(**public** — GitHub Pages 配信のための例外)。
+詳細仕様は末尾の spec.md(ツール本体を変える前に Read)。リポジトリ: `satouisao37/meguri`(**public** — GitHub Pages 配信のための例外)。
 
 > Issue 作成 → 実装 → 日本語コミット → close の**共通フロー・コミット規約・禁止事項は親 `/Users/soshi/dev/CLAUDE.md`「コードを変えるときの流れ」に集約**。ここには再掲せず、**このツール固有の前提とコマンドだけ**を書く。
 
@@ -29,5 +29,5 @@
 - 動作確認: `python3 -m http.server 8770 -d .` → `http://localhost:8770/`(localhost は secure context 扱いなので位置情報も可)。停止はポート特定 `lsof -ti tcp:8770 | xargs kill`。ヘッドレス確認は headless Chrome + CDP(共通ノウハウ [[2026-07-04_07-36_headlessChromeはCDPで回収]])。
 
 ## Obsidian Vault 連携
-- 仕様: `/Users/soshi/dev/vault/Tools/meguri/spec.md`(着手前に Read する。起動フォルダの外なので @import はしない)
+- 仕様: `/Users/soshi/dev/vault/Tools/meguri/spec.md`(ツール本体を変える前に Read する。起動フォルダの外なので @import はしない)
 - 固有ノウハウ: `/Users/soshi/dev/vault/Tools/meguri/knowhow/`(関係しそうなら Glob → Read)
